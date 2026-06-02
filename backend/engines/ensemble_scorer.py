@@ -26,7 +26,8 @@ def calculate_composite(
     fund_data: dict, 
     sent_data: dict,
     nifty_change: float = 0.0,
-    vix: float = 14.0
+    vix: float = 14.0,
+    user_capital: float = None
 ) -> dict:
     """
     Calculates final composite score and signal.
@@ -94,6 +95,32 @@ def calculate_composite(
         reward = base_target - current_price
         rr_ratio = round(reward / risk, 2) if risk > 0 else 0
 
+    # Position Sizing
+    position_sizing = None
+    if user_capital and user_capital > 0 and signal in ["BUY", "STRONG BUY"] and stop_loss and current_price:
+        # Risk Model: Risk 1% to 2% of total capital per trade based on confidence
+        risk_pct = 0.01 + (0.01 * (confidence / 100))
+        capital_at_risk = user_capital * risk_pct
+        risk_per_share = current_price - stop_loss
+        
+        if risk_per_share > 0:
+            qty = int(capital_at_risk / risk_per_share)
+            invested_amount = qty * current_price
+            
+            # Ensure we don't invest more than 20% of total capital in a single stock
+            max_allocation = user_capital * 0.20
+            if invested_amount > max_allocation:
+                qty = int(max_allocation / current_price)
+                invested_amount = qty * current_price
+
+            if qty > 0:
+                position_sizing = {
+                    "suggested_quantity": qty,
+                    "investment_amount": round(invested_amount, 2),
+                    "capital_at_risk": round(qty * risk_per_share, 2),
+                    "risk_pct_of_portfolio": round((qty * risk_per_share / user_capital) * 100, 2)
+                }
+
     return {
         "composite_score": comp_score,
         "signal": signal,
@@ -102,6 +129,7 @@ def calculate_composite(
         "targets": targets,
         "stop_loss": round(stop_loss, 2) if stop_loss else None,
         "risk_reward": rr_ratio,
+        "position_sizing": position_sizing,
         "weights_used": weights,
         "components": {
             "technical": t_score,
