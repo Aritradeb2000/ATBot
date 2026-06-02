@@ -43,10 +43,16 @@ def analyze_technical(df: pd.DataFrame) -> dict:
         
         # 4. Bollinger Bands
         bbands = ta.bbands(df["Close"], length=20, std=2)
-        df["BB_lower"] = bbands["BBL_20_2.0"]
-        df["BB_mid"] = bbands["BBM_20_2.0"]
-        df["BB_upper"] = bbands["BBU_20_2.0"]
-        df["BB_pct"] = bbands["BBP_20_2.0"]
+        if bbands is not None and not bbands.empty:
+            df["BB_lower"] = bbands.iloc[:, 0]
+            df["BB_mid"] = bbands.iloc[:, 1]
+            df["BB_upper"] = bbands.iloc[:, 2]
+            df["BB_pct"] = bbands.iloc[:, 4]
+        else:
+            df["BB_lower"] = None
+            df["BB_mid"] = None
+            df["BB_upper"] = None
+            df["BB_pct"] = None
         
         # 5. ATR (Average True Range)
         df["ATR_14"] = ta.atr(df["High"], df["Low"], df["Close"], length=14)
@@ -56,8 +62,12 @@ def analyze_technical(df: pd.DataFrame) -> dict:
         
         # 7. Supertrend (length=10, multiplier=3)
         st = ta.supertrend(df["High"], df["Low"], df["Close"], length=10, multiplier=3)
-        df["Supertrend"] = st["SUPERT_10_3.0"]
-        df["Supertrend_dir"] = st["SUPERTd_10_3.0"]
+        if st is not None and not st.empty:
+            df["Supertrend"] = st.iloc[:, 0]
+            df["Supertrend_dir"] = st.iloc[:, 1]
+        else:
+            df["Supertrend"] = None
+            df["Supertrend_dir"] = None
 
         # Run Candlestick patterns (only returns non-zero if found)
         # Note: pandas-ta automatically prefixes these with CDL_
@@ -103,7 +113,7 @@ def analyze_technical(df: pd.DataFrame) -> dict:
                 
         # ── EMA Scoring (20% weight)
         close_px = latest["Close"]
-        if pd.notna(latest["EMA_200"]):
+        if latest.get("EMA_200") is not None and pd.notna(latest["EMA_200"]):
             if close_px > latest["EMA_200"]:
                 score += 5
                 signals.append("Price > 200 EMA")
@@ -111,7 +121,7 @@ def analyze_technical(df: pd.DataFrame) -> dict:
                 score -= 5
                 signals.append("Price < 200 EMA")
                 
-        if pd.notna(latest["EMA_21"]) and pd.notna(latest["EMA_50"]):
+        if latest.get("EMA_21") is not None and pd.notna(latest["EMA_21"]) and latest.get("EMA_50") is not None and pd.notna(latest["EMA_50"]):
             if latest["EMA_21"] > latest["EMA_50"]:
                 score += 10
                 signals.append("Short EMA > Long EMA")
@@ -120,9 +130,15 @@ def analyze_technical(df: pd.DataFrame) -> dict:
                 signals.append("Short EMA < Long EMA")
                 
         # Golden Cross check
-        if prev["EMA_50"] <= prev["EMA_200"] and latest["EMA_50"] > latest["EMA_200"]:
-            score += 15
-            signals.append("🔥 Golden Cross (50>200 EMA)")
+        if (
+            prev.get("EMA_50") is not None and pd.notna(prev["EMA_50"]) and
+            prev.get("EMA_200") is not None and pd.notna(prev["EMA_200"]) and
+            latest.get("EMA_50") is not None and pd.notna(latest["EMA_50"]) and
+            latest.get("EMA_200") is not None and pd.notna(latest["EMA_200"])
+        ):
+            if prev["EMA_50"] <= prev["EMA_200"] and latest["EMA_50"] > latest["EMA_200"]:
+                score += 15
+                signals.append("🔥 Golden Cross (50>200 EMA)")
             
         # ── Bollinger Bands (10% weight)
         if pd.notna(latest["BB_lower"]):

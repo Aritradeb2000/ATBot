@@ -23,9 +23,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Analysis"])
 
 @router.get("/analyze/{symbol}")
-async def get_full_analysis(symbol: str):
+async def get_full_analysis(symbol: str, capital: Optional[float] = None):
     """
     Perform a complete, real-time analysis of a stock across all 3 engines.
+    Optionally accepts a 'capital' parameter to calculate suggested position sizing.
     """
     symbol = symbol.upper()
     
@@ -43,11 +44,11 @@ async def get_full_analysis(symbol: str):
     fii_dii = cache.get("fii_dii") or get_fii_dii_data()
     
     # Market context for dynamic weighting
-    indices = cache.get("indices", {})
-    nifty_data = indices.get("NIFTY50", {})
+    indices = cache.get("indices") or {}
+    nifty_data = indices.get("NIFTY50") or {}
     nifty_change = nifty_data.get("change_pct", 0.0)
     
-    vix_data = cache.get("india_vix", {})
+    vix_data = cache.get("india_vix") or {}
     vix = vix_data.get("vix", 14.0)
 
     # 2. Run Engines
@@ -61,7 +62,8 @@ async def get_full_analysis(symbol: str):
         fund_data=fund_result,
         sent_data=sent_result,
         nifty_change=nifty_change,
-        vix=vix
+        vix=vix,
+        user_capital=capital
     )
 
     return {
