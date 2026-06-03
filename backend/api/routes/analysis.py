@@ -47,6 +47,7 @@ async def get_full_analysis(symbol: str, capital: Optional[float] = None):
     indices = cache.get("indices") or {}
     nifty_data = indices.get("NIFTY50") or {}
     nifty_change = nifty_data.get("change_pct", 0.0)
+    nifty_change_20d = nifty_data.get("change_pct_20d", 0.0)
     
     vix_data = cache.get("india_vix") or {}
     vix = vix_data.get("vix", 14.0)
@@ -62,6 +63,7 @@ async def get_full_analysis(symbol: str, capital: Optional[float] = None):
         fund_data=fund_result,
         sent_data=sent_result,
         nifty_change=nifty_change,
+        nifty_change_20d=nifty_change_20d,
         vix=vix,
         user_capital=capital
     )
