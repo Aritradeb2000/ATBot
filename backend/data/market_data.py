@@ -181,14 +181,18 @@ def fetch_index_data() -> dict:
     for name, ticker in INDEX_TICKERS.items():
         try:
             t = yf.Ticker(ticker)
-            hist = t.history(period="2d", interval="1d")
+            hist = t.history(period="25d", interval="1d")
             if not hist.empty:
                 latest = hist.iloc[-1]
                 prev = hist.iloc[-2] if len(hist) > 1 else latest
                 pct_change = ((latest["Close"] - prev["Close"]) / prev["Close"]) * 100
+                # 20-day trailing change for regime detection
+                base = hist.iloc[0] if len(hist) >= 20 else prev
+                pct_change_20d = ((latest["Close"] - base["Close"]) / base["Close"]) * 100
                 result[name] = {
                     "price": round(latest["Close"], 2),
                     "change_pct": round(pct_change, 2),
+                    "change_pct_20d": round(pct_change_20d, 2),
                     "high": round(latest["High"], 2),
                     "low": round(latest["Low"], 2),
                 }

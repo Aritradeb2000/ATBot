@@ -9,14 +9,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def determine_market_regime(nifty_change: float, vix: float) -> str:
+def determine_market_regime(nifty_change: float, vix: float, nifty_change_20d: float = 0.0) -> str:
     """
     Determine if market is BULL, BEAR, or SIDEWAYS.
-    Uses recent Nifty % change and VIX level.
+    Uses 20-day trailing Nifty % change and VIX level for a more stable, 
+    trend-based regime that doesn't flip on a single bad day.
     """
-    if vix > 20 and nifty_change < -2:
+    if vix > 22 and nifty_change_20d < -5:
         return "BEAR"
-    elif nifty_change > 1:
+    elif nifty_change_20d > 3:
         return "BULL"
     return "SIDEWAYS"
 
@@ -26,6 +27,7 @@ def calculate_composite(
     fund_data: dict, 
     sent_data: dict,
     nifty_change: float = 0.0,
+    nifty_change_20d: float = 0.0,
     vix: float = 14.0,
     user_capital: float = None
 ) -> dict:
@@ -37,7 +39,7 @@ def calculate_composite(
     f_score = fund_data.get("score", 50)
     s_score = sent_data.get("score", 50)
 
-    regime = determine_market_regime(nifty_change, vix)
+    regime = determine_market_regime(nifty_change, vix, nifty_change_20d)
 
     # Dynamic Weighting based on Regime
     if regime == "BULL":
