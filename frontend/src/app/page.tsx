@@ -6,20 +6,43 @@ import StockCard from "@/components/ui/StockCard";
 import SignalBadge from "@/components/ui/SignalBadge";
 import { analyzeStock, getMarketOverview, type AnalysisResult, type MarketOverview } from "@/lib/api";
 
-// Default Nifty 50 watchlist
-const DEFAULT_WATCHLIST = [
-  "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS",
-  "ICICIBANK.NS", "WIPRO.NS", "AXISBANK.NS", "ITC.NS",
-  "KOTAKBANK.NS", "LTIM.NS",
-];
+import { useEffect } from "react";
 
+// Default fallback watchlist if local storage is empty
+const DEFAULT_WATCHLIST = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ITC.NS", "KOTAKBANK.NS"];
 const TOP_SIGNALS_SYMBOLS = ["TCS.NS", "RELIANCE.NS", "INFY.NS", "HDFCBANK.NS", "ITC.NS"];
 
-function useWatchlist(symbols: string[]) {
+function useTopSignals(symbols: string[]) {
   return useSWR<AnalysisResult[]>(
-    ["watchlist", symbols.join(",")],
+    ["top-signals", symbols.join(",")],
     () => Promise.all(symbols.map((s) => analyzeStock(s))),
     { revalidateOnFocus: false, dedupingInterval: 300000 }
+  );
+}
+
+function WatchlistCard({ symbol, index, onRemove }: { symbol: string, index: number, onRemove: (s: string) => void }) {
+  const { data, isLoading } = useSWR<AnalysisResult>(
+    ["analyze", symbol],
+    () => analyzeStock(symbol),
+    { revalidateOnFocus: false, dedupingInterval: 300000 }
+  );
+
+  if (isLoading) return <div className="shimmer" style={{ height: 160, borderRadius: 16 }} />;
+  if (!data) return null;
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button 
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(symbol); }}
+        style={{ position: "absolute", top: 12, right: 12, zIndex: 10, background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", borderRadius: "50%", width: 24, height: 24, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", paddingBottom: 2, fontSize: 14 }}
+        title="Remove from watchlist"
+        onMouseOver={(e) => e.currentTarget.style.color = "#ef4444"}
+        onMouseOut={(e) => e.currentTarget.style.color = "#94a3b8"}
+      >
+        ×
+      </button>
+      <StockCard symbol={data.symbol} companyName={data.company_name} price={data.current_price} analysis={data.analysis} index={index} />
+    </div>
   );
 }
 
@@ -109,9 +132,36 @@ function MarketOverviewCard({ data }: { data: MarketOverview | undefined }) {
 
 export default function DashboardPage() {
   const [search, setSearch] = useState("");
-  const { data: watchlistData, isLoading: wLoading } = useWatchlist(DEFAULT_WATCHLIST);
+  const [watchlist, setWatchlist] = useState<string[]>([]);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("atbot_watchlist");
+    if (stored) {
+      try { setWatchlist(JSON.parse(stored)); } catch { setWatchlist(DEFAULT_WATCHLIST); }
+    } else {
+      setWatchlist(DEFAULT_WATCHLIST);
+    }
+    setMounted(true);
+  }, []);
+
+  const handleAddWatchlist = () => {
+    const sym = search.trim().toUpperCase();
+    if (sym && !watchlist.includes(sym)) {
+      const nw = [sym, ...watchlist];
+      setWatchlist(nw);
+      localStorage.setItem("atbot_watchlist", JSON.stringify(nw));
+    }
+  };
+
+  const handleRemoveWatchlist = (sym: string) => {
+    const nw = watchlist.filter(s => s !== sym);
+    setWatchlist(nw);
+    localStorage.setItem("atbot_watchlist", JSON.stringify(nw));
+  };
+
   const { data: marketData } = useSWR<MarketOverview>("market-overview", getMarketOverview, { refreshInterval: 60000 });
-  const { data: topData } = useWatchlist(TOP_SIGNALS_SYMBOLS);
+  const { data: topData } = useTopSignals(TOP_SIGNALS_SYMBOLS);
 
   const topBuys = topData
     ?.filter((r) => r.analysis.signal === "BUY" || r.analysis.signal === "STRONG BUY")
@@ -161,6 +211,22 @@ export default function DashboardPage() {
           >
             Analyze
           </button>
+          <button
+            onClick={handleAddWatchlist}
+            style={{
+              padding: "10px 16px",
+              borderRadius: 10,
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              color: "#f1f5f9",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+            title="Add to Watchlist"
+          >
+            + Add
+          </button>
         </div>
       </motion.div>
 
@@ -173,18 +239,22 @@ export default function DashboardPage() {
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <h2 style={{ fontSize: 13, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", margin: 0 }}>MY WATCHLIST</h2>
-            <span style={{ fontSize: 11, color: "#334155" }}>{DEFAULT_WATCHLIST.length} stocks</span>
+            <span style={{ fontSize: 11, color: "#334155" }}>{mounted ? watchlist.length : 0} stocks</span>
           </div>
-          {wLoading ? (
+          {!mounted ? (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="shimmer" style={{ height: 160, borderRadius: 16 }} />
               ))}
             </div>
+          ) : watchlist.length === 0 ? (
+            <div className="glass-card p-6" style={{ textAlign: "center", color: "#475569" }}>
+              Your watchlist is empty.<br/>Search a stock and click + Add
+            </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
-              {watchlistData?.map((r, i) => (
-                <StockCard key={r.symbol} symbol={r.symbol} companyName={r.company_name} price={r.current_price} analysis={r.analysis} index={i} />
+              {watchlist.map((sym, i) => (
+                <WatchlistCard key={sym} symbol={sym} index={i} onRemove={handleRemoveWatchlist} />
               ))}
             </div>
           )}

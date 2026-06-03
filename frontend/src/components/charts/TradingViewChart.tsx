@@ -1,6 +1,14 @@
 "use client";
 import { useEffect, useRef } from "react";
-import { createChart, ColorType, LineStyle, type IChartApi, type ISeriesApi, type CandlestickSeriesOptions } from "lightweight-charts";
+import useSWR from "swr";
+import { api } from "@/lib/api";
+import {
+  createChart,
+  ColorType,
+  LineStyle,
+  CandlestickSeries,
+  type IChartApi,
+} from "lightweight-charts";
 
 interface OHLCVBar {
   time: string;
@@ -8,10 +16,9 @@ interface OHLCVBar {
   high: number;
   low: number;
   close: number;
-  volume?: number;
 }
 
-interface TargetLines {
+interface Targets {
   stopLoss?: number;
   conservative?: number;
   base?: number;
@@ -19,17 +26,36 @@ interface TargetLines {
 }
 
 interface Props {
-  data: OHLCVBar[];
-  targets?: TargetLines;
+  symbol: string;
   height?: number;
+  targets?: Targets;
 }
 
-export default function TradingViewChart({ data, targets, height = 420 }: Props) {
+async function fetchOHLCV(symbol: string): Promise<OHLCVBar[]> {
+  const res = await api.get(`/api/ohlcv/${encodeURIComponent(symbol)}`, {
+    params: { period: "6mo", interval: "1d" },
+  });
+  return res.data;
+}
+
+export default function StockChart({ symbol, height = 460, targets }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
+  const { data, isLoading, error } = useSWR<OHLCVBar[]>(
+    ["ohlcv", symbol],
+    () => fetchOHLCV(symbol),
+    { revalidateOnFocus: false }
+  );
+
   useEffect(() => {
-    if (!containerRef.current || data.length === 0) return;
+    if (!containerRef.current || !data || data.length === 0) return;
+
+    // Destroy previous chart
+    if (chartRef.current) {
+      chartRef.current.remove();
+      chartRef.current = null;
+    }
 
     const chart = createChart(containerRef.current, {
       layout: {
@@ -56,8 +82,8 @@ export default function TradingViewChart({ data, targets, height = 420 }: Props)
 
     chartRef.current = chart;
 
-    // Candlestick series
-    const candleSeries = chart.addCandlestickSeries({
+    // Candlestick series - v5 syntax
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: "#22c55e",
       downColor: "#ef4444",
       borderUpColor: "#22c55e",
@@ -67,49 +93,55 @@ export default function TradingViewChart({ data, targets, height = 420 }: Props)
     });
     candleSeries.setData(data);
 
-    // Target price lines
-    if (targets) {
-      if (targets.stopLoss) {
-        const sl = candleSeries.createPriceLine({
-          price: targets.stopLoss,
-          color: "#ef4444",
-          lineWidth: 1,
-          lineStyle: LineStyle.Dashed,
-          axisLabelVisible: true,
-          title: "SL",
-        });
-      }
-      if (targets.conservative) {
-        candleSeries.createPriceLine({ price: targets.conservative, color: "#86efac", lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: "T1" });
-      }
-      if (targets.base) {
-        candleSeries.createPriceLine({ price: targets.base, color: "#4ade80", lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: "T2" });
-      }
-      if (targets.aggressive) {
-        candleSeries.createPriceLine({ price: targets.aggressive, color: "#16a34a", lineWidth: 2, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: "T3 ⭐" });
-      }
+    // Price target lines
+    if (targets?.stopLoss) {
+      candleSeries.createPriceLine({ price: targets.stopLoss, color: "#ef4444", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: "SL" });
+    }
+    if (targets?.conservative) {
+      candleSeries.createPriceLine({ price: targets.conservative, color: "#86efac", lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: "T1" });
+    }
+    if (targets?.base) {
+      candleSeries.createPriceLine({ price: targets.base, color: "#4ade80", lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: "T2" });
+    }
+    if (targets?.aggressive) {
+      candleSeries.createPriceLine({ price: targets.aggressive, color: "#22c55e", lineWidth: 2, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: "T3 ★" });
     }
 
     chart.timeScale().fitContent();
 
-    // Resize observer
-    const resizeObserver = new ResizeObserver(() => {
+    // Responsive resize
+    const ro = new ResizeObserver(() => {
       if (containerRef.current) {
         chart.applyOptions({ width: containerRef.current.clientWidth });
       }
     });
-    resizeObserver.observe(containerRef.current);
+    ro.observe(containerRef.current);
 
     return () => {
-      resizeObserver.disconnect();
+      ro.disconnect();
       chart.remove();
+      chartRef.current = null;
     };
   }, [data, targets, height]);
 
-  return (
-    <div
-      ref={containerRef}
-      style={{ width: "100%", height, borderRadius: 12, overflow: "hidden" }}
-    />
-  );
+  if (isLoading) {
+    return (
+      <div style={{ height, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 10 }}>
+        <div style={{ width: 32, height: 32, border: "3px solid rgba(59,130,246,0.3)", borderTopColor: "#3b82f6", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+        <span style={{ fontSize: 12, color: "#475569" }}>Loading chart data…</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (error || !data || data.length === 0) {
+    return (
+      <div style={{ height, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
+        <span style={{ fontSize: 28 }}>📉</span>
+        <span style={{ fontSize: 13, color: "#475569" }}>Could not load chart data</span>
+      </div>
+    );
+  }
+
+  return <div ref={containerRef} style={{ width: "100%", height }} />;
 }

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import useSWR from "swr";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
@@ -23,6 +23,36 @@ export default function StockDetailPage({ params }: Props) {
   const capital = typeof window !== "undefined"
     ? parseFloat(localStorage.getItem("atbot_capital") || "0") || undefined
     : undefined;
+
+  const [inWatchlist, setInWatchlist] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("atbot_watchlist");
+    if (stored) {
+      try {
+        const wl = JSON.parse(stored);
+        setInWatchlist(wl.includes(decodedSymbol));
+      } catch { }
+    }
+    setMounted(true);
+  }, [decodedSymbol]);
+
+  const toggleWatchlist = () => {
+    try {
+      const stored = localStorage.getItem("atbot_watchlist");
+      let wl = stored ? JSON.parse(stored) : ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ITC.NS", "KOTAKBANK.NS"];
+      if (inWatchlist) {
+        wl = wl.filter((s: string) => s !== decodedSymbol);
+      } else {
+        if (!wl.includes(decodedSymbol)) wl = [decodedSymbol, ...wl];
+      }
+      localStorage.setItem("atbot_watchlist", JSON.stringify(wl));
+      setInWatchlist(!inWatchlist);
+    } catch (e) {
+      console.error("Failed to update watchlist", e);
+    }
+  };
 
   const { data, isLoading, error } = useSWR<AnalysisResult>(
     ["analyze", decodedSymbol, capital],
@@ -85,6 +115,27 @@ export default function StockDetailPage({ params }: Props) {
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>{ticker}</h1>
+            {mounted && (
+              <button
+                onClick={toggleWatchlist}
+                style={{
+                  background: inWatchlist ? "rgba(245,158,11,0.1)" : "rgba(255,255,255,0.05)",
+                  border: `1px solid ${inWatchlist ? "rgba(245,158,11,0.3)" : "rgba(255,255,255,0.1)"}`,
+                  color: inWatchlist ? "#fcd34d" : "#94a3b8",
+                  padding: "6px 12px",
+                  borderRadius: 20,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  transition: "all 0.2s"
+                }}
+              >
+                {inWatchlist ? "★ Saved" : "☆ Add to Watchlist"}
+              </button>
+            )}
             <SignalBadge signal={analysis.signal} confidence={analysis.confidence} size="lg" />
             <span
               className="metric-chip"
@@ -109,7 +160,6 @@ export default function StockDetailPage({ params }: Props) {
         </div>
       </motion.div>
 
-      {/* Chart placeholder */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -121,26 +171,20 @@ export default function StockDetailPage({ params }: Props) {
           <span style={{ fontSize: 13, fontWeight: 600, color: "#94a3b8" }}>
             📊 {ticker} — 6 Month Chart
           </span>
-          {analysis.targets && (
-            <span style={{ fontSize: 11, color: "#475569", marginLeft: 12 }}>
-              Target lines: SL, T1, T2, T3 drawn on chart
-            </span>
-          )}
+          <span style={{ fontSize: 11, color: "#475569", marginLeft: 12 }}>
+            Interactive candlestick chart. Target lines (SL, T1, T2, T3) shown if available.
+          </span>
         </div>
-        <div style={{ padding: 16, height: 420, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontSize: 40 }}>📈</div>
-          <p style={{ color: "#475569", fontSize: 13, textAlign: "center" }}>
-            Chart will render here with live OHLCV data.<br />
-            <a
-              href={`https://www.tradingview.com/chart/?symbol=NSE:${ticker}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: "#60a5fa", fontSize: 12 }}
-            >
-              Open in TradingView ↗
-            </a>
-          </p>
-        </div>
+        <TradingViewChart 
+          symbol={decodedSymbol} 
+          height={480} 
+          targets={analysis.targets && analysis.stop_loss ? {
+            stopLoss: analysis.stop_loss,
+            conservative: analysis.targets.conservative,
+            base: analysis.targets.base,
+            aggressive: analysis.targets.aggressive,
+          } : undefined}
+        />
       </motion.div>
 
       {/* 3-col info grid */}
@@ -203,9 +247,14 @@ export default function StockDetailPage({ params }: Props) {
             )}
             {activeTab === "fundamental" && (
               <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                {details.fundamental.flags.map((f, i) => (
-                  <li key={i} style={{ fontSize: 11, color: "#86efac", padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>✓ {f}</li>
-                ))}
+                {details.fundamental.flags.map((f, i) => {
+                  const isNegative = f.includes("Negative") || f.includes("Expensive") || f.includes("High Debt") || f.includes("Low ROE") || f.includes("Low Promoter") || f.includes("Low Profit");
+                  return (
+                    <li key={i} style={{ fontSize: 11, color: isNegative ? "#ef4444" : "#86efac", padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                      {isNegative ? "✗ " : "✓ "} {f.replace("⚠️ ", "")}
+                    </li>
+                  );
+                })}
               </ul>
             )}
             {activeTab === "sentiment" && (

@@ -75,7 +75,7 @@ export async function getMarketNews(limit = 50): Promise<NewsArticle[]> {
 }
 
 export async function getStockNews(symbol: string, limit = 10): Promise<NewsArticle[]> {
-  const res = await api.get(`/api/news/stock/${symbol.toUpperCase()}`, { params: { limit } });
+  const res = await api.get(`/api/news/${symbol.toUpperCase()}`, { params: { limit } });
   return res.data;
 }
 
