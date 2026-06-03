@@ -85,13 +85,11 @@ def fetch_all_rss_feeds() -> list[dict]:
 
 # ── Finnhub News ──────────────────────────────────────────────────────────
 
-def fetch_finnhub_news(symbol: str, days_back: int = 3) -> list[dict]:
+def fetch_finnhub_news(symbol: str, days_back: int = 365, max_articles: int = 25) -> list[dict]:
     """
     Fetch ticker-specific news from Finnhub API.
-    symbol: plain symbol e.g. "RELIANCE" (Finnhub uses exchange prefix)
-    Free tier: 60 calls/min
-
-    Returns list of news articles.
+    Looks back up to a year to ensure we find news, but caps the results 
+    to `max_articles` so the AI sentiment model doesn't take 5 minutes to run.
     """
     if not settings.finnhub_api_key:
         return []
@@ -132,7 +130,11 @@ def fetch_finnhub_news(symbol: str, days_back: int = 3) -> list[dict]:
                 "symbol": symbol,
             })
 
-        logger.info(f"📰 Finnhub: {len(articles)} articles for {symbol}")
+        # Sort newest first, then cap it so FinBERT runs fast
+        articles.sort(key=lambda x: x["published_at"], reverse=True)
+        articles = articles[:max_articles]
+        
+        logger.info(f"📰 Finnhub: {len(articles)} articles (capped) for {symbol}")
         return articles
 
     except Exception as e:

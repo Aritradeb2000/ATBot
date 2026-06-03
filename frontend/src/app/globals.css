@@ -1,0 +1,123 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Color Tokens ───────────────────────────────────────────────────────── */
+:root {
+  --bg-base:        #070b14;
+  --bg-surface:     #0d1225;
+  --bg-card:        #111827;
+  --bg-card-hover:  #1a2235;
+  --border:         rgba(255, 255, 255, 0.08);
+  --border-bright:  rgba(255, 255, 255, 0.15);
+
+  --accent-blue:    #3b82f6;
+  --accent-blue-glow: rgba(59, 130, 246, 0.3);
+  --accent-cyan:    #06b6d4;
+
+  --signal-buy:     #22c55e;
+  --signal-strong-buy: #16a34a;
+  --signal-hold:    #f59e0b;
+  --signal-sell:    #f97316;
+  --signal-strong-sell: #ef4444;
+
+  --text-primary:   #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted:     #475569;
+}
+
+/* ── Base Styles ─────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Glass Card ──────────────────────────────────────────────────────────── */
+@layer components {
+  .glass-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    backdrop-filter: blur(12px);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .glass-card:hover {
+    border-color: var(--border-bright);
+  }
+  .glass-card-glow {
+    box-shadow: 0 0 24px var(--accent-blue-glow);
+    border-color: rgba(59, 130, 246, 0.4);
+  }
+
+  /* ── Gradient Text ─────────────────────────────────────────────────────── */
+  .gradient-text {
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Signal Colors ─────────────────────────────────────────────────────── */
+  .signal-strong-buy  { color: var(--signal-strong-buy); }
+  .signal-buy         { color: var(--signal-buy); }
+  .signal-hold        { color: var(--signal-hold); }
+  .signal-sell        { color: var(--signal-sell); }
+  .signal-strong-sell { color: var(--signal-strong-sell); }
+
+  /* ── Metric Chip ───────────────────────────────────────────────────────── */
+  .metric-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.04);
+  }
+
+  /* ── Shimmer Skeleton ──────────────────────────────────────────────────── */
+  .shimmer {
+    background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-card-hover) 50%, var(--bg-card) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s infinite;
+    border-radius: 8px;
+  }
+}
+
+/* ── Animations ──────────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes pulse-ring {
+  0%   { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.ticker-animate {
+  animation: ticker-scroll 40s linear infinite;
+}
+.ticker-animate:hover {
+  animation-play-state: paused;
+}
