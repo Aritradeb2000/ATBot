@@ -218,6 +218,7 @@ def _generate_market_comment(vix_data: dict, fii_dii: dict) -> str:
 
 def setup_scheduler():
     """Register all scheduled jobs and configure triggers."""
+    now = datetime.now(IST)
 
     # Every 5 min during market hours: OHLCV + index refresh
     scheduler.add_job(
@@ -226,6 +227,7 @@ def setup_scheduler():
         id="market_data",
         name="Market Data Refresh",
         replace_existing=True,
+        next_run_time=now if is_market_open() else None
     )
 
     scheduler.add_job(
@@ -234,6 +236,7 @@ def setup_scheduler():
         id="index_data",
         name="Index & VIX Refresh",
         replace_existing=True,
+        next_run_time=now
     )
 
     # Every 10 min: News feed
@@ -243,6 +246,7 @@ def setup_scheduler():
         id="news_feed",
         name="News Feed Refresh",
         replace_existing=True,
+        next_run_time=now
     )
 
     # Daily 6 PM IST: Fundamentals + FII/DII
@@ -260,6 +264,7 @@ def setup_scheduler():
         id="fii_dii",
         name="FII/DII Data Refresh",
         replace_existing=True,
+        next_run_time=now
     )
 
     # Daily 9 AM IST: Earnings calendar
@@ -269,6 +274,7 @@ def setup_scheduler():
         id="earnings",
         name="Earnings Calendar",
         replace_existing=True,
+        next_run_time=now
     )
 
     # Daily 8:45 AM IST: Morning briefing
@@ -284,7 +290,7 @@ def setup_scheduler():
         replace_existing=True,
     )
 
-    logger.info("✅ All scheduler jobs registered")
+    logger.info("✅ All scheduler jobs registered and initial syncs triggered")
     return scheduler
 
 

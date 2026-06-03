@@ -9,7 +9,10 @@ import logging
 
 from backend.config import settings
 from backend.models.database import init_db
-from backend.data.scheduler import setup_scheduler
+from backend.data.scheduler import (
+    setup_scheduler, job_refresh_index_data,
+    job_refresh_news, job_refresh_fii_dii
+)
 
 # Routers
 from backend.api.routes import analysis, market, news
@@ -34,6 +37,13 @@ async def lifespan(app: FastAPI):
     # 2. Start Background Scheduler
     scheduler = setup_scheduler()
     scheduler.start()
+
+    # 3. Eagerly warm the cache so the frontend gets data immediately
+    logger.info("⚡ Warming cache on startup...")
+    await job_refresh_index_data()
+    await job_refresh_news()
+    await job_refresh_fii_dii()
+    logger.info("✅ Cache warm — ready to serve!")
     
     yield  # Application runs while yielded
     
