@@ -8,8 +8,8 @@ import SignalBadge from "@/components/ui/SignalBadge";
 import PriceTargetBar from "@/components/ui/PriceTargetBar";
 import { analyzeStock, getStockNews, type AnalysisResult, type NewsArticle } from "@/lib/api";
 
-// TradingView chart is client-only (no SSR)
-const TradingViewChart = dynamic(() => import("@/components/charts/TradingViewChart"), { ssr: false });
+// Chart is client-only (no SSR)
+const StockChart = dynamic(() => import("@/components/charts/TradingViewWidget"), { ssr: false });
 
 interface Props {
   params: { symbol: string };
@@ -119,28 +119,22 @@ export default function StockDetailPage({ params }: Props) {
       >
         <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: "#94a3b8" }}>
-            📊 {ticker} — 6 Month Chart
+            📊 {ticker} — Live Chart
           </span>
-          {analysis.targets && (
-            <span style={{ fontSize: 11, color: "#475569", marginLeft: 12 }}>
-              Target lines: SL, T1, T2, T3 drawn on chart
-            </span>
-          )}
+          <span style={{ fontSize: 11, color: "#475569", marginLeft: 12 }}>
+            EMA · RSI · MACD · Supertrend overlays included
+          </span>
         </div>
-        <div style={{ padding: 16, height: 420, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontSize: 40 }}>📈</div>
-          <p style={{ color: "#475569", fontSize: 13, textAlign: "center" }}>
-            Chart will render here with live OHLCV data.<br />
-            <a
-              href={`https://www.tradingview.com/chart/?symbol=NSE:${ticker}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: "#60a5fa", fontSize: 12 }}
-            >
-              Open in TradingView ↗
-            </a>
-          </p>
-        </div>
+        <StockChart
+          symbol={decodedSymbol}
+          height={480}
+          targets={analysis.targets && analysis.stop_loss ? {
+            stopLoss: analysis.stop_loss,
+            conservative: analysis.targets.conservative,
+            base: analysis.targets.base,
+            aggressive: analysis.targets.aggressive,
+          } : undefined}
+        />
       </motion.div>
 
       {/* 3-col info grid */}

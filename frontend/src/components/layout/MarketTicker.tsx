@@ -9,7 +9,7 @@ export default function MarketTicker() {
 
   const items = data
     ? Object.entries(data.indices).map(([name, info]) => ({
-        label: name,
+        label: name.replace("_", " "),
         price: info.price,
         change: info.change_pct,
       }))
@@ -18,9 +18,6 @@ export default function MarketTicker() {
         { label: "SENSEX",   price: null, change: 0 },
         { label: "INDIA VIX",price: null, change: 0 },
       ];
-
-  const vix = data?.india_vix;
-  if (vix) items.push({ label: "INDIA VIX", price: vix.vix, change: 0 });
 
   // Duplicate for seamless loop
   const all = [...items, ...items];
