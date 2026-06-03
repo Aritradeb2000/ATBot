@@ -92,7 +92,62 @@ def fetch_finnhub_news(symbol: str, days_back: int = 365, max_articles: int = 25
     to `max_articles` so the AI sentiment model doesn't take 5 minutes to run.
     """
     if not settings.finnhub_api_key:
-        return []
+        logger.info(f"📰 Finnhub API key missing, falling back to yfinance for {symbol}")
+        try:
+            import yfinance as yf
+            ticker = yf.Ticker(symbol)
+            yf_news = ticker.news
+            if not yf_news:
+                return []
+                
+            articles = []
+            for item in yf_news:
+                content = item.get("content", {})
+                if not content:
+                    content = item
+                    
+                url_str = ""
+                click_url = content.get("clickThroughUrl", {})
+                if isinstance(click_url, dict):
+                    url_str = click_url.get("url", "")
+                if not url_str:
+                    url_str = content.get("link", "")
+                    
+                url_hash = hashlib.md5(url_str.encode()).hexdigest()
+                
+                pubDate_str = content.get("pubDate", "")
+                if pubDate_str:
+                    try:
+                        published_at = datetime.fromisoformat(pubDate_str.replace("Z", "+00:00"))
+                    except:
+                        published_at = datetime.now(timezone.utc)
+                else:
+                    try:
+                        published_at = datetime.fromtimestamp(content.get("providerPublishTime", 0), tz=timezone.utc)
+                    except:
+                        published_at = datetime.now(timezone.utc)
+                
+                provider = content.get("provider", {})
+                if isinstance(provider, dict):
+                    source = provider.get("displayName", "Yahoo Finance")
+                else:
+                    source = provider or content.get("publisher", "Yahoo Finance")
+                
+                articles.append({
+                    "id": url_hash,
+                    "headline": _clean_text(content.get("title", "")),
+                    "summary": _clean_text(content.get("summary", "")),
+                    "url": url_str,
+                    "source": source,
+                    "published_at": published_at,
+                    "symbol": symbol,
+                })
+                
+            articles.sort(key=lambda x: x["published_at"], reverse=True)
+            return articles[:max_articles]
+        except Exception as e:
+            logger.error(f"yfinance news fetch failed for {symbol}: {e}")
+            return []
 
     try:
         from datetime import date, timedelta

@@ -3,14 +3,48 @@ ATBot — Market & Screener Endpoints
 Routes for market breadth, index status, and screener functionality
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 import logging
 
 from backend.data.scheduler import get_cache
+from backend.data.market_data import fetch_ohlcv
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Market"])
+
+@router.get("/ohlcv/{symbol}")
+async def get_ohlcv(
+    symbol: str,
+    period: str = Query("6mo", description="yfinance period: 1mo, 3mo, 6mo, 1y"),
+    interval: str = Query("1d", description="yfinance interval: 1d, 1wk"),
+):
+    """
+    Returns OHLCV data for a symbol formatted for lightweight-charts.
+    Each bar: { time: 'YYYY-MM-DD', open, high, low, close, volume }
+    """
+    try:
+        df = fetch_ohlcv(symbol, interval=interval, period=period)
+        if df is None or df.empty:
+            return []
+
+        bars = []
+        for idx, row in df.iterrows():
+            # idx is a Timestamp
+            time_str = idx.strftime("%Y-%m-%d")
+            bars.append({
+                "time": time_str,
+                "open":  round(float(row["Open"]),  2),
+                "high":  round(float(row["High"]),  2),
+                "low":   round(float(row["Low"]),   2),
+                "close": round(float(row["Close"]), 2),
+                "volume": int(row["Volume"]) if "Volume" in row else 0,
+            })
+
+        return bars
+    except Exception as e:
+        logger.error(f"OHLCV fetch failed for {symbol}: {e}")
+        return []
 
 @router.get("/market/overview")
 async def get_market_overview():
