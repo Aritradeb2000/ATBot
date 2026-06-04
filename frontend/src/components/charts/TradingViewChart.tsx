@@ -27,24 +27,26 @@ interface Targets {
 
 interface Props {
   symbol: string;
+  period?: string;
+  interval?: string;
   height?: number;
   targets?: Targets;
 }
 
-async function fetchOHLCV(symbol: string): Promise<OHLCVBar[]> {
+async function fetchOHLCV(symbol: string, period: string, interval: string): Promise<OHLCVBar[]> {
   const res = await api.get(`/api/ohlcv/${encodeURIComponent(symbol)}`, {
-    params: { period: "6mo", interval: "1d" },
+    params: { period, interval },
   });
   return res.data;
 }
 
-export default function StockChart({ symbol, height = 460, targets }: Props) {
+export default function StockChart({ symbol, period = "6mo", interval = "1d", height = 460, targets }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
   const { data, isLoading, error } = useSWR<OHLCVBar[]>(
-    ["ohlcv", symbol],
-    () => fetchOHLCV(symbol),
+    ["ohlcv", symbol, period, interval],
+    () => fetchOHLCV(symbol, period, interval),
     { revalidateOnFocus: false }
   );
 
@@ -82,7 +84,7 @@ export default function StockChart({ symbol, height = 460, targets }: Props) {
 
     chartRef.current = chart;
 
-    // Candlestick series - v5 syntax
+    // Candlestick series — v5 syntax
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: "#22c55e",
       downColor: "#ef4444",
@@ -128,7 +130,7 @@ export default function StockChart({ symbol, height = 460, targets }: Props) {
     return (
       <div style={{ height, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 10 }}>
         <div style={{ width: 32, height: 32, border: "3px solid rgba(59,130,246,0.3)", borderTopColor: "#3b82f6", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-        <span style={{ fontSize: 12, color: "#475569" }}>Loading chart data…</span>
+        <span style={{ fontSize: 12, color: "#475569" }}>Loading chart…</span>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );

@@ -27,6 +27,14 @@ export default function StockDetailPage({ params }: Props) {
   const [inWatchlist, setInWatchlist] = useState(false);
   const [mounted, setMounted] = useState(false);
 
+  const RANGES = [
+    { label: "1M", period: "1mo", interval: "1d" },
+    { label: "3M", period: "3mo", interval: "1d" },
+    { label: "6M", period: "6mo", interval: "1d" },
+    { label: "1Y", period: "1y",  interval: "1wk" },
+  ];
+  const [activeRange, setActiveRange] = useState(RANGES[2]);
+
   useEffect(() => {
     const stored = localStorage.getItem("atbot_watchlist");
     if (stored) {
@@ -167,16 +175,46 @@ export default function StockDetailPage({ params }: Props) {
         className="glass-card"
         style={{ marginBottom: 20, overflow: "hidden" }}
       >
-        <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#94a3b8" }}>
-            📊 {ticker} — 6 Month Chart
-          </span>
-          <span style={{ fontSize: 11, color: "#475569", marginLeft: 12 }}>
-            Interactive candlestick chart. Target lines (SL, T1, T2, T3) shown if available.
-          </span>
+        <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+          <div>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#94a3b8" }}>
+              📊 {ticker} — Interactive Chart
+            </span>
+            <span style={{ fontSize: 11, color: "#475569", marginLeft: 10 }}>
+              Candlestick · Target lines (SL, T1, T2, T3) shown if available
+            </span>
+          </div>
+          {/* Range toggle pills */}
+          <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: "3px 4px" }}>
+            {RANGES.map((r) => {
+              const isActive = r.label === activeRange.label;
+              return (
+                <button
+                  key={r.label}
+                  onClick={() => setActiveRange(r)}
+                  style={{
+                    padding: "4px 13px",
+                    borderRadius: 16,
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: "0.04em",
+                    transition: "all 0.18s",
+                    background: isActive ? "linear-gradient(135deg, #3b82f6, #6366f1)" : "transparent",
+                    color: isActive ? "#fff" : "#64748b",
+                  }}
+                >
+                  {r.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <TradingViewChart 
-          symbol={decodedSymbol} 
+          symbol={decodedSymbol}
+          period={activeRange.period}
+          interval={activeRange.interval}
           height={480} 
           targets={analysis.targets && analysis.stop_loss ? {
             stopLoss: analysis.stop_loss,
