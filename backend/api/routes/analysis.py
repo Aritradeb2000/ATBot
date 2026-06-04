@@ -72,6 +72,8 @@ async def get_full_analysis(symbol: str, capital: Optional[float] = None):
         "symbol": symbol,
         "company_name": fundamentals.get("company_name", symbol) if fundamentals else symbol,
         "current_price": tech_result.get("close"),
+        "change": tech_result.get("change"),
+        "change_pct": tech_result.get("change_pct"),
         "analysis": final_result,
         "details": {
             "technical": tech_result,
