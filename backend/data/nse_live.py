@@ -171,6 +171,11 @@ def get_fii_dii_data() -> Optional[dict]:
     Fetch FII and DII provisional trading data from NSE.
     Published daily after market close (~5:30–6 PM IST).
 
+    NSE response format:
+    [
+      {"category": "DII",     "date": "03-Jun-2026", "buyValue": "17530",    "sellValue": "11789.11", "netValue": "5740.89"},
+      {"category": "FII/FPI", "date": "03-Jun-2026", "buyValue": "17053.63", "sellValue": "22670.19", "netValue": "-5616.56"}
+    ]
     Returns net buy/sell figures in ₹ crores.
     """
     try:
@@ -180,24 +185,28 @@ def get_fii_dii_data() -> Optional[dict]:
         if not data or not isinstance(data, list):
             return None
 
-        # Latest entry is today's data
-        latest = data[0] if data else {}
+        fii_row = next((d for d in data if "FII" in d.get("category", "").upper()), {})
+        dii_row = next((d for d in data if d.get("category", "").upper() == "DII"), {})
 
-        fii_buy = _parse_crore(latest.get("fiiBuy", "0"))
-        fii_sell = _parse_crore(latest.get("fiiSell", "0"))
-        dii_buy = _parse_crore(latest.get("diiBuy", "0"))
-        dii_sell = _parse_crore(latest.get("diiSell", "0"))
+        fii_buy  = _parse_crore(fii_row.get("buyValue",  "0"))
+        fii_sell = _parse_crore(fii_row.get("sellValue", "0"))
+        fii_net  = _parse_crore(fii_row.get("netValue",  "0"))
+        dii_buy  = _parse_crore(dii_row.get("buyValue",  "0"))
+        dii_sell = _parse_crore(dii_row.get("sellValue", "0"))
+        dii_net  = _parse_crore(dii_row.get("netValue",  "0"))
+
+        entry_date = fii_row.get("date") or dii_row.get("date") or date.today().strftime("%d-%b-%Y")
 
         return {
-            "date": latest.get("date", date.today().strftime("%d-%b-%Y")),
-            "fii_buy": fii_buy,
-            "fii_sell": fii_sell,
-            "fii_net": round(fii_buy - fii_sell, 2),
-            "dii_buy": dii_buy,
-            "dii_sell": dii_sell,
-            "dii_net": round(dii_buy - dii_sell, 2),
-            "fii_sentiment": "BULLISH" if fii_buy > fii_sell else "BEARISH",
-            "dii_sentiment": "BULLISH" if dii_buy > dii_sell else "BEARISH",
+            "date":          entry_date,
+            "fii_buy":       fii_buy,
+            "fii_sell":      fii_sell,
+            "fii_net":       round(fii_net, 2),
+            "dii_buy":       dii_buy,
+            "dii_sell":      dii_sell,
+            "dii_net":       round(dii_net, 2),
+            "fii_sentiment": "BULLISH" if fii_net >= 0 else "BEARISH",
+            "dii_sentiment": "BULLISH" if dii_net >= 0 else "BEARISH",
         }
 
     except Exception as e:
@@ -214,19 +223,23 @@ def get_fii_dii_history(days: int = 30) -> list[dict]:
         if not data or not isinstance(data, list):
             return []
 
-        result = []
-        for entry in data[:days]:
-            fii_buy = _parse_crore(entry.get("fiiBuy", "0"))
-            fii_sell = _parse_crore(entry.get("fiiSell", "0"))
-            dii_buy = _parse_crore(entry.get("diiBuy", "0"))
-            dii_sell = _parse_crore(entry.get("diiSell", "0"))
+        # NSE returns a flat list of all dates, alternating FII and DII rows.
+        # Group by date first.
+        by_date: dict = {}
+        for entry in data:
+            d = entry.get("date", "")
+            cat = entry.get("category", "").upper()
+            if d not in by_date:
+                by_date[d] = {}
+            if "FII" in cat:
+                by_date[d]["fii_net"] = _parse_crore(entry.get("netValue", "0"))
+            elif cat == "DII":
+                by_date[d]["dii_net"] = _parse_crore(entry.get("netValue", "0"))
 
-            result.append({
-                "date": entry.get("date"),
-                "fii_net": round(fii_buy - fii_sell, 2),
-                "dii_net": round(dii_buy - dii_sell, 2),
-            })
-
+        result = [
+            {"date": d, "fii_net": v.get("fii_net", 0), "dii_net": v.get("dii_net", 0)}
+            for d, v in list(by_date.items())[:days]
+        ]
         return result
 
     except Exception as e:
