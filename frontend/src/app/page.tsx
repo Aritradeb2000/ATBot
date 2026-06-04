@@ -21,26 +21,39 @@ function useTopSignals(symbols: string[]) {
 }
 
 function WatchlistCard({ symbol, index, onRemove }: { symbol: string, index: number, onRemove: (s: string) => void }) {
-  const { data, isLoading } = useSWR<AnalysisResult>(
+  const { data, error, isLoading } = useSWR<AnalysisResult>(
     ["analyze", symbol],
     () => analyzeStock(symbol),
     { revalidateOnFocus: false, dedupingInterval: 300000 }
   );
 
   if (isLoading) return <div className="shimmer" style={{ height: 160, borderRadius: 16 }} />;
-  if (!data) return null;
+  
+  const removeButton = (
+    <button 
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(symbol); }}
+      style={{ position: "absolute", top: 12, right: 12, zIndex: 10, background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", borderRadius: "50%", width: 24, height: 24, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", paddingBottom: 2, fontSize: 14 }}
+      title="Remove from watchlist"
+      onMouseOver={(e) => e.currentTarget.style.color = "#ef4444"}
+      onMouseOut={(e) => e.currentTarget.style.color = "#94a3b8"}
+    >
+      ×
+    </button>
+  );
+
+  if (error || !data) {
+    return (
+      <div style={{ position: "relative", minHeight: 160, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }} className="glass-card p-4 text-center">
+        {removeButton}
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>{symbol.replace(".NS", "").replace(".BO", "")}</div>
+        <div style={{ fontSize: 13, color: "#ef4444" }}>Failed to load data</div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: "relative" }}>
-      <button 
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(symbol); }}
-        style={{ position: "absolute", top: 12, right: 12, zIndex: 10, background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", borderRadius: "50%", width: 24, height: 24, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", paddingBottom: 2, fontSize: 14 }}
-        title="Remove from watchlist"
-        onMouseOver={(e) => e.currentTarget.style.color = "#ef4444"}
-        onMouseOut={(e) => e.currentTarget.style.color = "#94a3b8"}
-      >
-        ×
-      </button>
+      {removeButton}
       <StockCard symbol={data.symbol} companyName={data.company_name} price={data.current_price} change={data.change} changePct={data.change_pct} analysis={data.analysis} index={index} />
     </div>
   );
