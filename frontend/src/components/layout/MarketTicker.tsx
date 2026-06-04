@@ -8,19 +8,19 @@ export default function MarketTicker() {
   const { data } = useSWR<MarketOverview>("market-overview", fetcher, { refreshInterval: 60000 });
 
   const items = data
-    ? Object.entries(data.indices).map(([name, info]) => ({
-        label: name,
-        price: info.price,
-        change: info.change_pct,
-      }))
+    ? Object.entries(data.indices)
+        .filter(([name]) => name !== "SGX_NIFTY")  // skip pre-market proxy
+        .map(([name, info]) => ({
+          label: name.replace(/_/g, " "),  // INDIA_VIX -> INDIA VIX
+          price: info.price,
+          change: info.change_pct,
+          isVix: name.includes("VIX"),
+        }))
     : [
-        { label: "NIFTY 50", price: null, change: 0 },
-        { label: "SENSEX",   price: null, change: 0 },
-        { label: "INDIA VIX",price: null, change: 0 },
+        { label: "NIFTY 50",  price: null, change: 0, isVix: false },
+        { label: "SENSEX",    price: null, change: 0, isVix: false },
+        { label: "INDIA VIX", price: null, change: 0, isVix: true },
       ];
-
-  const vix = data?.india_vix;
-  if (vix) items.push({ label: "INDIA VIX", price: vix.vix, change: 0 });
 
   // Duplicate for seamless loop
   const all = [...items, ...items];
@@ -55,7 +55,7 @@ export default function MarketTicker() {
             {item.price != null ? (
               <>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#f1f5f9" }}>
-                  {item.label === "INDIA VIX" ? item.price.toFixed(2) : `₹${item.price.toLocaleString("en-IN")}`}
+                  {item.isVix ? item.price.toFixed(2) : `₹${item.price.toLocaleString("en-IN")}`}
                 </span>
                 {item.change !== 0 && (
                   <span
