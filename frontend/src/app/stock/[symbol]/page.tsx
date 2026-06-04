@@ -31,7 +31,7 @@ export default function StockDetailPage({ params }: Props) {
     { label: "1M", period: "1mo", interval: "1d" },
     { label: "3M", period: "3mo", interval: "1d" },
     { label: "6M", period: "6mo", interval: "1d" },
-    { label: "1Y", period: "1y",  interval: "1wk" },
+    { label: "1Y", period: "1y",  interval: "1d" },
   ];
   const [activeRange, setActiveRange] = useState(RANGES[2]);
 
