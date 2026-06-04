@@ -199,6 +199,9 @@ def analyze_technical(df: pd.DataFrame) -> dict:
             "macd": round(macd_val, 2) if pd.notna(macd_val) else None,
             "atr": round(latest["ATR_14"], 2) if pd.notna(latest["ATR_14"]) else None,
             "close": round(close_px, 2),
+            "prev_close": round(float(prev["Close"]), 2),
+            "change": round(close_px - float(prev["Close"]), 2),
+            "change_pct": round(((close_px - float(prev["Close"])) / float(prev["Close"])) * 100, 2),
             "supertrend_dir": latest.get("Supertrend_dir", 0),
         }
 

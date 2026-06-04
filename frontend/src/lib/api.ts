@@ -34,9 +34,11 @@ export interface AnalysisResult {
   symbol: string;
   company_name: string;
   current_price: number | null;
+  change: number | null;
+  change_pct: number | null;
   analysis: Analysis;
   details: {
-    technical: { score: number; signals: string[]; rsi?: number; macd?: number; atr?: number; close?: number };
+    technical: { score: number; signals: string[]; rsi?: number; macd?: number; atr?: number; close?: number; change?: number; change_pct?: number };
     fundamental: { score: number; flags: string[] };
     sentiment: { score: number; flags: string[]; news_breakdown: { positive: number; negative: number; neutral: number } };
   };

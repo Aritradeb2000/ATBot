@@ -41,7 +41,7 @@ function WatchlistCard({ symbol, index, onRemove }: { symbol: string, index: num
       >
         ×
       </button>
-      <StockCard symbol={data.symbol} companyName={data.company_name} price={data.current_price} analysis={data.analysis} index={index} />
+      <StockCard symbol={data.symbol} companyName={data.company_name} price={data.current_price} change={data.change} changePct={data.change_pct} analysis={data.analysis} index={index} />
     </div>
   );
 }

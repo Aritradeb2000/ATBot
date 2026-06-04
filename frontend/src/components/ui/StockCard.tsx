@@ -8,16 +8,20 @@ interface Props {
   symbol: string;
   companyName: string;
   price: number | null;
+  change?: number | null;
+  changePct?: number | null;
   analysis: Analysis;
   index?: number;
 }
 
-export default function StockCard({ symbol, companyName, price, analysis, index = 0 }: Props) {
+export default function StockCard({ symbol, companyName, price, change, changePct, analysis, index = 0 }: Props) {
   const score = analysis.composite_score;
   const regime = analysis.regime;
   const regimeColor = regime === "BULL" ? "#22c55e" : regime === "BEAR" ? "#ef4444" : "#f59e0b";
 
   const ticker = symbol.replace(".NS", "").replace(".BO", "");
+  const isUp = (changePct ?? 0) >= 0;
+  const changeColor = isUp ? "#22c55e" : "#ef4444";
 
   return (
     <motion.div
@@ -65,12 +69,29 @@ export default function StockCard({ symbol, companyName, price, analysis, index 
             </div>
           </div>
 
-          {/* Price */}
+          {/* Price + Change */}
           <div className="mb-3">
             {price ? (
-              <span style={{ fontSize: 22, fontWeight: 700, color: "#f1f5f9" }}>
-                ₹{price.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-              </span>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 22, fontWeight: 700, color: "#f1f5f9" }}>
+                  ₹{price.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                </span>
+                {changePct != null && change != null && (
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: changeColor,
+                      background: changeColor + "18",
+                      border: `1px solid ${changeColor}30`,
+                      borderRadius: 6,
+                      padding: "1px 6px",
+                    }}
+                  >
+                    {isUp ? "▲" : "▼"} {Math.abs(changePct).toFixed(2)}%
+                  </span>
+                )}
+              </div>
             ) : (
               <span style={{ fontSize: 14, color: "#475569" }}>Price unavailable</span>
             )}
