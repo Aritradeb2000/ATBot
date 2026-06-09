@@ -1,92 +1,139 @@
 "use client";
-import { useState } from "react";
-import { motion } from "framer-motion";
-import useSWR from "swr";
-import SignalBadge from "@/components/ui/SignalBadge";
-import { analyzeStock, type AnalysisResult } from "@/lib/api";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import SignalBadge from "@/components/ui/SignalBadge";
+import { runScreener, type ScreenerResult, type ScreenerParams } from "@/lib/api";
 
-const NIFTY50 = [
-  "RELIANCE.NS","TCS.NS","HDFCBANK.NS","INFY.NS","ICICIBANK.NS",
-  "HINDUNILVR.NS","ITC.NS","SBIN.NS","KOTAKBANK.NS","AXISBANK.NS",
-  "LT.NS","WIPRO.NS","ONGC.NS","MARUTI.NS","NTPC.NS",
-  "POWERGRID.NS","TITAN.NS","BAJFINANCE.NS","HCLTECH.NS","TECHM.NS",
-];
-
+// ── Types ─────────────────────────────────────────────────────────────────────
 type SignalFilter = "ALL" | "STRONG BUY" | "BUY" | "HOLD" | "SELL" | "STRONG SELL";
+type SortBy = "score" | "rsi" | "change_pct" | "symbol";
+type Preset = "custom" | "breakout" | "reversal";
 
-function useScreener(symbols: string[]) {
-  return useSWR<AnalysisResult[]>(
-    ["screener", symbols.join(",")],
-    () => Promise.all(symbols.map((s) => analyzeStock(s).catch(() => null as unknown as AnalysisResult))),
-    { revalidateOnFocus: false, dedupingInterval: 600000 }
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const scoreColor = (s: number) => s >= 70 ? "#22c55e" : s >= 50 ? "#f59e0b" : "#ef4444";
+const rsiColor   = (r: number) => r < 30 ? "#22c55e" : r > 70 ? "#ef4444" : "#94a3b8";
+const regimeColor = (r: string) => r === "BULL" ? "#22c55e" : r === "BEAR" ? "#ef4444" : "#f59e0b";
+
+// ── Subcomponents ─────────────────────────────────────────────────────────────
+function FilterPill({
+  active, onClick, children,
+}: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "5px 12px",
+        borderRadius: 8,
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: "pointer",
+        background: active ? "rgba(59,130,246,0.15)" : "transparent",
+        border: active ? "1px solid rgba(59,130,246,0.4)" : "1px solid transparent",
+        color: active ? "#60a5fa" : "#64748b",
+        textAlign: "left",
+        transition: "all 0.15s",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
+function Chip({ color, children }: { color: string; children: React.ReactNode }) {
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6,
+      background: color + "18", border: `1px solid ${color}30`, color,
+    }}>
+      {children}
+    </span>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ScreenerPage() {
-  const [signalFilter, setSignalFilter] = useState<SignalFilter>("ALL");
-  const [minScore, setMinScore] = useState(0);
-  const [minRsi, setMinRsi] = useState(0);
-  const [maxRsi, setMaxRsi] = useState(100);
-  const [sortBy, setSortBy] = useState<"score" | "rsi" | "symbol">("score");
-  const [preset, setPreset] = useState<"custom" | "breakout" | "reversal">("custom");
+  const [preset, setPreset]         = useState<Preset>("custom");
+  const [signal, setSignal]         = useState<SignalFilter>("ALL");
+  const [minScore, setMinScore]     = useState(0);
+  const [minRsi, setMinRsi]         = useState(0);
+  const [maxRsi, setMaxRsi]         = useState(100);
+  const [sortBy, setSortBy]         = useState<SortBy>("score");
+  const [universe, setUniverse]     = useState<"nifty50" | "watchlist">("nifty50");
+  const [watchlistSyms, setWatchlistSyms] = useState<string>("");
 
-  const { data, isLoading } = useScreener(NIFTY50);
+  const [results, setResults]       = useState<ScreenerResult[]>([]);
+  const [meta, setMeta]             = useState<{ scanned: number; found: number; filtered: number } | null>(null);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState<string | null>(null);
+  const [hasScanned, setHasScanned] = useState(false);
 
-  const results = (data?.filter(Boolean) ?? [])
-    .filter((r) => {
-      if (signalFilter !== "ALL" && r.analysis.signal !== signalFilter) return false;
-      if (r.analysis.composite_score < minScore) return false;
-      const rsi = r.details.technical.rsi;
-      if (rsi != null && (rsi < minRsi || rsi > maxRsi)) return false;
+  // Load watchlist from localStorage for the "My Watchlist" universe option
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("atbot_watchlist");
+      if (stored) setWatchlistSyms(JSON.parse(stored).join(","));
+    } catch { /* ignore */ }
+  }, []);
 
-      // Presets
-      if (preset === "breakout") {
-        const sigs = r.details.technical.signals;
-        return (
-          (r.analysis.signal === "BUY" || r.analysis.signal === "STRONG BUY") &&
-          sigs.some((s) => s.includes("Volume") || s.includes("Supertrend") || s.includes("MACD Bullish"))
-        );
-      }
-      if (preset === "reversal") {
-        const rsiVal = r.details.technical.rsi ?? 50;
-        return rsiVal < 35 && (r.analysis.signal === "BUY" || r.analysis.signal === "STRONG BUY");
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === "score") return b.analysis.composite_score - a.analysis.composite_score;
-      if (sortBy === "rsi") return (a.details.technical.rsi ?? 0) - (b.details.technical.rsi ?? 0);
-      return a.symbol.localeCompare(b.symbol);
-    });
+  const handleScan = async () => {
+    setLoading(true);
+    setError(null);
+    setHasScanned(true);
+
+    const params: ScreenerParams = {
+      universe: universe === "watchlist" ? "custom" : "nifty50",
+      signal:   signal,
+      min_score: minScore,
+      min_rsi:   minRsi,
+      max_rsi:   maxRsi,
+      preset:    preset,
+      sort_by:   sortBy,
+    };
+    if (universe === "watchlist" && watchlistSyms) {
+      params.symbols = watchlistSyms;
+    }
+
+    try {
+      const data = await runScreener(params);
+      setResults(data.results);
+      setMeta({ scanned: data.total_scanned, found: data.total_found, filtered: data.total_filtered });
+    } catch (e) {
+      setError("Scan failed. Make sure the backend is running.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const SIGNAL_OPTIONS: SignalFilter[] = ["ALL", "STRONG BUY", "BUY", "HOLD", "SELL", "STRONG SELL"];
 
   return (
-    <div style={{ maxWidth: 1200 }}>
+    <div style={{ maxWidth: 1300 }}>
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>Screener</h1>
-        <p style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>Filter and rank NSE stocks by AI composite score</p>
+        <p style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
+          Filter and rank NSE stocks by AI composite score · {universe === "nifty50" ? "Nifty 50 (50 stocks)" : "My Watchlist"}
+        </p>
       </motion.div>
 
-      {/* Preset strategies */}
+      {/* Preset strategy pills */}
       <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-        {[
-          { id: "custom" as const,   icon: "⊙", label: "Custom Filters" },
+        {([
+          { id: "custom"   as const, icon: "⊙", label: "Custom Filters" },
           { id: "breakout" as const, icon: "🚀", label: "Breakout Setups" },
           { id: "reversal" as const, icon: "🔄", label: "Reversal Candidates" },
-        ].map((p) => (
+        ] as const).map((p) => (
           <button
             key={p.id}
             onClick={() => setPreset(p.id)}
             style={{
-              padding: "8px 18px",
+              padding: "9px 20px",
               borderRadius: 10,
               background: preset === p.id ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.04)",
               border: preset === p.id ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.08)",
               color: preset === p.id ? "#60a5fa" : "#64748b",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
+              fontSize: 13, fontWeight: 700, cursor: "pointer",
             }}
           >
             {p.icon} {p.label}
@@ -95,39 +142,48 @@ export default function ScreenerPage() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 20 }}>
-        {/* Filters panel */}
-        <div className="glass-card p-5 h-fit">
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 16 }}>FILTERS</div>
+        {/* ── Filters panel ─────────────────────────────────────────── */}
+        <div className="glass-card p-5 h-fit" style={{ position: "sticky", top: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 16 }}>
+            FILTERS
+          </div>
+
+          {/* Universe */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>UNIVERSE</label>
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              {(["nifty50", "watchlist"] as const).map((u) => (
+                <button
+                  key={u}
+                  onClick={() => setUniverse(u)}
+                  style={{
+                    flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                    background: universe === u ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.04)",
+                    border: universe === u ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.08)",
+                    color: universe === u ? "#60a5fa" : "#64748b",
+                  }}
+                >
+                  {u === "nifty50" ? "Nifty 50" : "Watchlist"}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Signal */}
           <div style={{ marginBottom: 20 }}>
             <label style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>SIGNAL TYPE</label>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
-              {(["ALL","STRONG BUY","BUY","HOLD","SELL","STRONG SELL"] as SignalFilter[]).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSignalFilter(s)}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 8,
-                    textAlign: "left",
-                    background: signalFilter === s ? "rgba(59,130,246,0.1)" : "transparent",
-                    border: signalFilter === s ? "1px solid rgba(59,130,246,0.3)" : "1px solid transparent",
-                    color: signalFilter === s ? "#60a5fa" : "#64748b",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  {s}
-                </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 8 }}>
+              {SIGNAL_OPTIONS.map((s) => (
+                <FilterPill key={s} active={signal === s} onClick={() => setSignal(s)}>{s}</FilterPill>
               ))}
             </div>
           </div>
 
           {/* Min Score */}
           <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>MIN SCORE: {minScore}</label>
+            <label style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>
+              MIN SCORE: <span style={{ color: "#60a5fa" }}>{minScore}</span>
+            </label>
             <input
               type="range" min={0} max={90} value={minScore}
               onChange={(e) => setMinScore(+e.target.value)}
@@ -137,90 +193,198 @@ export default function ScreenerPage() {
 
           {/* RSI Range */}
           <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>RSI RANGE: {minRsi} – {maxRsi}</label>
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <input type="number" value={minRsi} min={0} max={100} onChange={(e) => setMinRsi(+e.target.value)}
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#f1f5f9", fontSize: 12, outline: "none" }} />
-              <input type="number" value={maxRsi} min={0} max={100} onChange={(e) => setMaxRsi(+e.target.value)}
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#f1f5f9", fontSize: 12, outline: "none" }} />
+            <label style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>
+              RSI RANGE: <span style={{ color: "#60a5fa" }}>{minRsi}–{maxRsi}</span>
+            </label>
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              {[
+                { label: "Min", val: minRsi, set: setMinRsi },
+                { label: "Max", val: maxRsi, set: setMaxRsi },
+              ].map(({ label, val, set }) => (
+                <input key={label} type="number" value={val} min={0} max={100}
+                  onChange={(e) => set(+e.target.value)}
+                  style={{ width: "100%", padding: "6px 8px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#f1f5f9", fontSize: 12, outline: "none" }}
+                />
+              ))}
             </div>
           </div>
 
           {/* Sort */}
-          <div>
+          <div style={{ marginBottom: 24 }}>
             <label style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>SORT BY</label>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              onChange={(e) => setSortBy(e.target.value as SortBy)}
               style={{ width: "100%", marginTop: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#f1f5f9", fontSize: 12, outline: "none" }}
             >
-              <option value="score">Composite Score</option>
-              <option value="rsi">RSI (Low→High)</option>
-              <option value="symbol">Symbol A→Z</option>
+              <option value="score">Composite Score ↓</option>
+              <option value="rsi">RSI Low → High</option>
+              <option value="change_pct">Change % ↓</option>
+              <option value="symbol">Symbol A → Z</option>
             </select>
           </div>
+
+          {/* Run Scan button */}
+          <button
+            onClick={handleScan}
+            disabled={loading}
+            style={{
+              width: "100%", padding: "11px", borderRadius: 10,
+              background: loading ? "rgba(59,130,246,0.3)" : "linear-gradient(135deg, #3b82f6, #6366f1)",
+              border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            }}
+          >
+            {loading ? (
+              <>
+                <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+                Scanning…
+              </>
+            ) : "▶ Run Scan"}
+          </button>
         </div>
 
-        {/* Results table */}
+        {/* ── Results ───────────────────────────────────────────────── */}
         <div>
+          {/* Results header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <span style={{ fontSize: 13, color: "#475569" }}>
-              {isLoading ? "Loading 20 stocks…" : `${results.length} results`}
+              {loading
+                ? `⏳ Scanning ${universe === "nifty50" ? "50" : "your watchlist"} stocks…`
+                : meta
+                  ? `${meta.filtered} results  ·  ${meta.found} analysed  ·  ${meta.scanned} scanned`
+                  : "Click ▶ Run Scan to start"}
             </span>
           </div>
 
-          {isLoading ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {[...Array(8)].map((_, i) => <div key={i} className="shimmer" style={{ height: 60, borderRadius: 12 }} />)}
+          {/* Loading skeletons */}
+          {loading && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[...Array(10)].map((_, i) => (
+                <div key={i} className="shimmer" style={{ height: 54, borderRadius: 12 }} />
+              ))}
             </div>
-          ) : results.length === 0 ? (
+          )}
+
+          {/* Error */}
+          {error && !loading && (
+            <div className="glass-card p-6" style={{ textAlign: "center", color: "#ef4444" }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          {/* Empty */}
+          {!loading && !error && hasScanned && results.length === 0 && (
             <div className="glass-card p-8" style={{ textAlign: "center" }}>
               <div style={{ fontSize: 32, marginBottom: 10 }}>🔍</div>
               <p style={{ color: "#64748b", fontSize: 13 }}>No stocks match your current filters.</p>
+              <p style={{ color: "#334155", fontSize: 12, marginTop: 6 }}>Try relaxing the filters or choosing a different preset.</p>
             </div>
-          ) : (
-            <>
-              {/* Table header */}
-              <div style={{ display: "grid", gridTemplateColumns: "140px 1fr 80px 60px 60px 60px 100px", gap: 8, padding: "8px 16px", marginBottom: 4 }}>
-                {["SYMBOL","COMPANY","SCORE","T","F","S","SIGNAL"].map((h) => (
-                  <div key={h} style={{ fontSize: 10, fontWeight: 700, color: "#334155", letterSpacing: "0.08em" }}>{h}</div>
-                ))}
-              </div>
+          )}
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {results.map((r, i) => {
-                  const ticker = r.symbol.replace(".NS","").replace(".BO","");
-                  const score = r.analysis.composite_score;
-                  return (
-                    <motion.div
-                      key={r.symbol}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.03 }}
-                    >
-                      <Link href={`/stock/${encodeURIComponent(r.symbol)}`}>
-                        <div className="glass-card"
-                          style={{ display: "grid", gridTemplateColumns: "140px 1fr 80px 60px 60px 60px 100px", gap: 8, padding: "12px 16px", alignItems: "center", cursor: "pointer" }}
-                          onMouseEnter={(e) => e.currentTarget.style.borderColor = "rgba(59,130,246,0.3)"}
-                          onMouseLeave={(e) => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
-                        >
-                          <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>{ticker}</div>
-                          <div style={{ fontSize: 11, color: "#64748b" }} className="truncate">{r.company_name}</div>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: score >= 70 ? "#22c55e" : score >= 50 ? "#f59e0b" : "#ef4444" }}>{Math.round(score)}</div>
-                          {[r.analysis.components.technical, r.analysis.components.fundamental, r.analysis.components.sentiment].map((s, j) => (
-                            <div key={j} style={{ fontSize: 12, fontWeight: 600, color: s >= 70 ? "#22c55e" : s >= 50 ? "#f59e0b" : "#ef4444" }}>{Math.round(s)}</div>
-                          ))}
-                          <SignalBadge signal={r.analysis.signal} size="sm" />
-                        </div>
-                      </Link>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </>
+          {/* Pre-scan prompt */}
+          {!loading && !error && !hasScanned && (
+            <div className="glass-card p-10" style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>📡</div>
+              <p style={{ color: "#64748b", fontSize: 14, fontWeight: 600 }}>Set your filters and click Run Scan</p>
+              <p style={{ color: "#334155", fontSize: 12, marginTop: 6 }}>
+                Nifty 50 scan takes ~15–25 seconds. Results are sorted by AI composite score.
+              </p>
+            </div>
+          )}
+
+          {/* Results table */}
+          {!loading && results.length > 0 && (
+            <AnimatePresence>
+              <>
+                {/* Table header */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "120px 1fr 90px 90px 60px 50px 50px 50px 110px 90px",
+                  gap: 8, padding: "8px 16px", marginBottom: 4,
+                }}>
+                  {["SYMBOL","COMPANY","PRICE","CHANGE","SCORE","T","F","S","SIGNAL","RSI"].map((h) => (
+                    <div key={h} style={{ fontSize: 10, fontWeight: 700, color: "#334155", letterSpacing: "0.07em" }}>{h}</div>
+                  ))}
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {results.map((r, i) => {
+                    const ticker = r.symbol.replace(".NS", "").replace(".BO", "");
+                    const isUp = (r.change_pct ?? 0) >= 0;
+                    return (
+                      <motion.div
+                        key={r.symbol}
+                        initial={{ opacity: 0, x: -12 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: Math.min(i * 0.025, 0.4) }}
+                      >
+                        <Link href={`/stock/${encodeURIComponent(r.symbol)}`}>
+                          <div
+                            className="glass-card"
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "120px 1fr 90px 90px 60px 50px 50px 50px 110px 90px",
+                              gap: 8, padding: "13px 16px", alignItems: "center", cursor: "pointer",
+                              transition: "border-color 0.15s",
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.borderColor = "rgba(59,130,246,0.35)"}
+                            onMouseLeave={(e) => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
+                          >
+                            {/* Symbol */}
+                            <div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>{ticker}</div>
+                              <Chip color={regimeColor(r.regime)}>{r.regime}</Chip>
+                            </div>
+
+                            {/* Company */}
+                            <div style={{ fontSize: 11, color: "#64748b" }} className="truncate">{r.company_name}</div>
+
+                            {/* Price */}
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>
+                              {r.price != null ? `₹${r.price.toLocaleString("en-IN", { maximumFractionDigits: 2 })}` : "—"}
+                            </div>
+
+                            {/* Change % */}
+                            <div style={{ fontSize: 12, fontWeight: 700, color: isUp ? "#22c55e" : "#ef4444" }}>
+                              {r.change_pct != null
+                                ? `${isUp ? "▲" : "▼"} ${Math.abs(r.change_pct).toFixed(2)}%`
+                                : "—"}
+                            </div>
+
+                            {/* Score */}
+                            <div style={{ fontSize: 16, fontWeight: 800, color: scoreColor(r.score) }}>
+                              {Math.round(r.score)}
+                            </div>
+
+                            {/* T / F / S */}
+                            {[r.components.technical, r.components.fundamental, r.components.sentiment].map((s, j) => (
+                              <div key={j} style={{ fontSize: 12, fontWeight: 600, color: scoreColor(s) }}>
+                                {Math.round(s)}
+                              </div>
+                            ))}
+
+                            {/* Signal */}
+                            <SignalBadge signal={r.signal} size="sm" />
+
+                            {/* RSI */}
+                            <div style={{ fontSize: 13, fontWeight: 700, color: r.rsi != null ? rsiColor(r.rsi) : "#475569" }}>
+                              {r.rsi != null ? r.rsi.toFixed(1) : "—"}
+                            </div>
+                          </div>
+                        </Link>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </>
+            </AnimatePresence>
           )}
         </div>
       </div>
+
+      {/* Spinner keyframe */}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

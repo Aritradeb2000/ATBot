@@ -44,6 +44,31 @@ export interface AnalysisResult {
   };
 }
 
+export interface ScreenerResult {
+  symbol: string;
+  company_name: string;
+  price: number | null;
+  change: number | null;
+  change_pct: number | null;
+  score: number;
+  signal: "STRONG BUY" | "BUY" | "HOLD" | "SELL" | "STRONG SELL";
+  confidence: number;
+  regime: "BULL" | "SIDEWAYS" | "BEAR";
+  rsi: number | null;
+  atr: number | null;
+  components: { technical: number; fundamental: number; sentiment: number };
+  signals: string[];
+}
+
+export interface ScreenerResponse {
+  total_scanned: number;
+  total_found: number;
+  total_filtered: number;
+  preset: string;
+  universe: string;
+  results: ScreenerResult[];
+}
+
 export interface NewsArticle {
   id: string;
   headline: string;
@@ -88,5 +113,25 @@ export async function getMarketOverview(): Promise<MarketOverview> {
 
 export async function healthCheck(): Promise<{ status: string }> {
   const res = await api.get("/health");
+  return res.data;
+}
+
+export interface ScreenerParams {
+  universe?: string;
+  symbols?: string;   // comma-separated when universe=custom
+  signal?: string;
+  min_score?: number;
+  min_rsi?: number;
+  max_rsi?: number;
+  preset?: string;
+  sort_by?: string;
+  limit?: number;
+}
+
+export async function runScreener(params: ScreenerParams = {}): Promise<ScreenerResponse> {
+  const res = await api.get("/api/screener", {
+    params,
+    timeout: 120000,  // 2 min timeout for full Nifty 50 scan
+  });
   return res.data;
 }
