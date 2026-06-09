@@ -15,7 +15,7 @@ from backend.data.scheduler import (
 )
 
 # Routers
-from backend.api.routes import analysis, market, news
+from backend.api.routes import analysis, market, news, screener
 from backend.api.websocket import router as ws_router
 
 # Setup basic logging
@@ -71,6 +71,7 @@ app.add_middleware(
 app.include_router(analysis.router, prefix="/api")
 app.include_router(market.router, prefix="/api")
 app.include_router(news.router, prefix="/api")
+app.include_router(screener.router, prefix="/api")
 app.include_router(ws_router)
 
 @app.get("/health")
