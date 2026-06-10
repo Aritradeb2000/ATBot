@@ -135,3 +135,11 @@ export async function runScreener(params: ScreenerParams = {}): Promise<Screener
   });
   return res.data;
 }
+
+// -- Market Intelligence --
+export interface FiiDiiPoint { date: string; fii_net: number; dii_net: number; }
+export interface VixPoint { date: string; vix: number; }
+export interface SectorPoint { sector: string; price: number; change_pct: number; }
+export async function getFiiHistory(days = 30): Promise<FiiDiiPoint[]> { const res = await api.get('/api/market/fii-history', { params: { days } }); return res.data; }
+export async function getVixHistory(days = 30): Promise<VixPoint[]> { const res = await api.get('/api/market/vix-history', { params: { days } }); return res.data; }
+export async function getSectorHeatmap(): Promise<SectorPoint[]> { const res = await api.get('/api/market/sector-heatmap'); return res.data; }
