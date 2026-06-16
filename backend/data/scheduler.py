@@ -310,7 +310,7 @@ def setup_scheduler():
     # Daily 6:30 PM IST: Signal outcome check (D5 & D10)
     scheduler.add_job(
         job_check_signal_outcomes,
-        trigger=CronTrigger(hour=18, minute=30, timezone=IST),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=30, timezone=IST),
         id="signal_outcomes",
         name="Signal Outcome Check",
         replace_existing=True,
