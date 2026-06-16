@@ -241,3 +241,32 @@ class UserSettings(Base):
     screener_default_universe = Column(String(20), default='nifty50')
     screener_default_sort = Column(String(20), default='score')
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# -- Signal Outcomes --
+class SignalOutcome(Base):
+    __tablename__ = 'signal_outcomes'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    analysis_score_id = Column(Integer, index=True)   # FK to analysis_scores.id
+    symbol = Column(String(20), nullable=False, index=True)
+    signal = Column(String(20), index=True)           # STRONG BUY, BUY, HOLD, SELL, STRONG SELL
+    composite_score = Column(Float)
+    technical_score = Column(Float)
+    fundamental_score = Column(Float)
+    sentiment_score = Column(Float)
+    confidence = Column(Float)
+    entry_date = Column(DateTime, nullable=False, index=True)
+    entry_price = Column(Float)
+    stop_loss = Column(Float)
+    target_conservative = Column(Float)  # target_low_5d
+    target_base = Column(Float)          # target_base_5d
+    target_aggressive = Column(Float)    # target_high_5d
+    check_day = Column(Integer)          # 5 or 10
+    check_date = Column(DateTime)
+    price_at_check = Column(Float)
+    pnl_amount = Column(Float)           # price_at_check - entry_price
+    pnl_percent = Column(Float)          # % P&L
+    outcome = Column(String(20), index=True)  # WIN / LOSS / BREAKEVEN / OPEN
+    outcome_detail = Column(String(50))       # e.g. TARGET_HIT / SL_HIT / PARTIAL
+    created_at = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (UniqueConstraint('analysis_score_id', 'check_day', name='uq_outcome_score_day'),)

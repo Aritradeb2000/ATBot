@@ -22,6 +22,7 @@ from backend.data.market_data import (
 from backend.data.nse_live import get_fii_dii_data, get_market_breadth, get_india_vix
 from backend.data.news_feed import fetch_all_rss_feeds
 from backend.data.fundamentals import fetch_fundamentals_yfinance, get_upcoming_earnings
+from backend.engines.outcome_tracker import run_outcome_check
 
 logger = logging.getLogger(__name__)
 
@@ -214,6 +215,22 @@ def _generate_market_comment(vix_data: dict, fii_dii: dict) -> str:
     return " ".join(filter(None, comments))
 
 
+# ── Outcome Tracking Job ──────────────────────────────────────────────────
+
+async def job_check_signal_outcomes():
+    """
+    Daily at 6:30 PM IST: check price at Day 5 & Day 10 vs each signal's
+    stop loss and target. Writes results into signal_outcomes table.
+    """
+    logger.info("📊 [Scheduler] Checking signal outcomes (D5/D10)...")
+    try:
+        count = await run_outcome_check()
+        logger.info(f"✅ Signal outcomes: {count} new records written")
+        _cache["last_updated"]["signal_outcomes"] = datetime.now(IST).isoformat()
+    except Exception as e:
+        logger.error(f"❌ Outcome check failed: {e}")
+
+
 # ── Scheduler Setup ───────────────────────────────────────────────────────
 
 def setup_scheduler():
@@ -287,6 +304,15 @@ def setup_scheduler():
         ),
         id="morning_briefing",
         name="Morning Briefing",
+        replace_existing=True,
+    )
+
+    # Daily 6:30 PM IST: Signal outcome check (D5 & D10)
+    scheduler.add_job(
+        job_check_signal_outcomes,
+        trigger=CronTrigger(hour=18, minute=30, timezone=IST),
+        id="signal_outcomes",
+        name="Signal Outcome Check",
         replace_existing=True,
     )
 
