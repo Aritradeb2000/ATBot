@@ -74,25 +74,26 @@ async def get_full_analysis(symbol: str, capital: Optional[float] = None, db: As
 
     # 4. Save to Database
     try:
+        targets = final_result.get("targets") or {}
         score_record = AnalysisScore(
             symbol=symbol,
-            technical_score=final_result.get("technical_score"),
-            fundamental_score=final_result.get("fundamental_score"),
-            sentiment_score=final_result.get("sentiment_score"),
+            technical_score=final_result.get("components", {}).get("technical"),
+            fundamental_score=final_result.get("components", {}).get("fundamental"),
+            sentiment_score=final_result.get("components", {}).get("sentiment"),
             composite_score=final_result.get("composite_score"),
             signal=final_result.get("signal"),
-            confidence=0.8,  # Hardcoded for now until confidence is added to ensemble
+            confidence=final_result.get("confidence", 0.8),
             current_price=tech_result.get("close"),
-            target_low_5d=final_result.get("targets", {}).get("5d_low"),
-            target_base_5d=final_result.get("targets", {}).get("5d_base"),
-            target_high_5d=final_result.get("targets", {}).get("5d_high"),
-            target_low_10d=final_result.get("targets", {}).get("10d_low"),
-            target_base_10d=final_result.get("targets", {}).get("10d_base"),
-            target_high_10d=final_result.get("targets", {}).get("10d_high"),
+            target_low_5d=targets.get("conservative"),
+            target_base_5d=targets.get("base"),
+            target_high_5d=targets.get("aggressive"),
+            target_low_10d=targets.get("conservative"),
+            target_base_10d=targets.get("base"),
+            target_high_10d=targets.get("aggressive"),
             stop_loss=final_result.get("stop_loss"),
             active_signals=json.dumps(tech_result.get("signals", [])),
             dominant_pattern=tech_result.get("trend"),
-            atr_14=tech_result.get("atr_14")
+            atr_14=tech_result.get("atr")
         )
         db.add(score_record)
         await db.commit()
