@@ -7,11 +7,15 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
 import logging
 
+import json
 from backend.data.market_data import fetch_ohlcv, get_current_price
 from backend.data.fundamentals import fetch_fundamentals_yfinance
 from backend.data.news_feed import fetch_finnhub_news
 from backend.data.nse_live import get_fii_dii_data
 from backend.data.scheduler import get_cache
+from backend.models.database import get_db
+from backend.models.schemas import AnalysisScore
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.engines.technical_engine import analyze_technical
 from backend.engines.fundamental_engine import analyze_fundamental
@@ -23,7 +27,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Analysis"])
 
 @router.get("/analyze/{symbol}")
-async def get_full_analysis(symbol: str, capital: Optional[float] = None):
+async def get_full_analysis(symbol: str, capital: Optional[float] = None, db: AsyncSession = Depends(get_db)):
     """
     Perform a complete, real-time analysis of a stock across all 3 engines.
     Optionally accepts a 'capital' parameter to calculate suggested position sizing.
@@ -68,6 +72,33 @@ async def get_full_analysis(symbol: str, capital: Optional[float] = None):
         user_capital=capital
     )
 
+    # 4. Save to Database
+    try:
+        score_record = AnalysisScore(
+            symbol=symbol,
+            technical_score=final_result.get("technical_score"),
+            fundamental_score=final_result.get("fundamental_score"),
+            sentiment_score=final_result.get("sentiment_score"),
+            composite_score=final_result.get("composite_score"),
+            signal=final_result.get("signal"),
+            confidence=0.8,  # Hardcoded for now until confidence is added to ensemble
+            current_price=tech_result.get("close"),
+            target_low_5d=final_result.get("targets", {}).get("5d_low"),
+            target_base_5d=final_result.get("targets", {}).get("5d_base"),
+            target_high_5d=final_result.get("targets", {}).get("5d_high"),
+            target_low_10d=final_result.get("targets", {}).get("10d_low"),
+            target_base_10d=final_result.get("targets", {}).get("10d_base"),
+            target_high_10d=final_result.get("targets", {}).get("10d_high"),
+            stop_loss=final_result.get("stop_loss"),
+            active_signals=json.dumps(tech_result.get("signals", [])),
+            dominant_pattern=tech_result.get("trend"),
+            atr_14=tech_result.get("atr_14")
+        )
+        db.add(score_record)
+        await db.commit()
+    except Exception as e:
+        logger.error(f"Failed to save AnalysisScore for {symbol}: {e}")
+
     return {
         "symbol": symbol,
         "company_name": fundamentals.get("company_name", symbol) if fundamentals else symbol,
@@ -84,7 +115,7 @@ async def get_full_analysis(symbol: str, capital: Optional[float] = None):
 
 
 @router.get("/score/{symbol}")
-async def get_quick_score(symbol: str):
+async def get_quick_score(symbol: str, db: AsyncSession = Depends(get_db)):
     """
     Returns only the composite score and signal.
     Useful for watchlist updates.
@@ -92,7 +123,7 @@ async def get_quick_score(symbol: str):
     # For a production system with many users, this would ideally hit a cached value
     # or an async DB table populated by a background worker.
     # For now, we reuse the full analysis pipeline.
-    res = await get_full_analysis(symbol)
+    res = await get_full_analysis(symbol, capital=None, db=db)
     return {
         "symbol": symbol,
         "current_price": res["current_price"],
