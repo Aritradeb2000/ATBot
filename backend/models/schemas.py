@@ -221,3 +221,23 @@ class TradeJournal(Base):
     trade_notes = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# -- User Settings --
+class UserSettings(Base):
+    __tablename__ = 'user_settings'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(50), nullable=False, unique=True, default='default')
+    capital = Column(Float, default=100000.0)
+    risk_profile = Column(String(20), default='moderate')
+    alert_signal_change = Column(Boolean, default=True)
+    alert_strong_signals_only = Column(Boolean, default=False)
+    alert_volume_spike = Column(Boolean, default=True)
+    alert_vix_threshold = Column(Float, default=20.0)
+    alert_fii_threshold = Column(Float, default=2000.0)
+    notify_browser = Column(Boolean, default=True)
+    notify_telegram = Column(Boolean, default=False)
+    telegram_chat_id = Column(String(50))
+    screener_default_universe = Column(String(20), default='nifty50')
+    screener_default_sort = Column(String(20), default='score')
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

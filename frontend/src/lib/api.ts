@@ -143,3 +143,8 @@ export interface SectorPoint { sector: string; price: number; change_pct: number
 export async function getFiiHistory(days = 30): Promise<FiiDiiPoint[]> { const res = await api.get('/api/market/fii-history', { params: { days } }); return res.data; }
 export async function getVixHistory(days = 30): Promise<VixPoint[]> { const res = await api.get('/api/market/vix-history', { params: { days } }); return res.data; }
 export async function getSectorHeatmap(): Promise<SectorPoint[]> { const res = await api.get('/api/market/sector-heatmap'); return res.data; }
+
+// -- Settings --
+export interface UserSettings { user_id: string; capital: number; risk_profile: string; alert_signal_change: boolean; alert_strong_signals_only: boolean; alert_volume_spike: boolean; alert_vix_threshold: number; alert_fii_threshold: number; notify_browser: boolean; notify_telegram: boolean; telegram_chat_id: string | null; screener_default_universe: string; screener_default_sort: string; updated_at: string | null; }
+export async function getSettings(): Promise<UserSettings> { const res = await api.get('/api/settings'); return res.data; }
+export async function saveSettings(data: Partial<UserSettings>): Promise<{ status: string; settings: UserSettings }> { const res = await api.put('/api/settings', data); return res.data; }
