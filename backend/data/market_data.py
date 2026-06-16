@@ -181,20 +181,35 @@ def fetch_index_data() -> dict:
     for name, ticker in INDEX_TICKERS.items():
         try:
             t = yf.Ticker(ticker)
+            
+            # Fetch info for live accurate daily change
+            info = t.info or {}
+            live_price = info.get("regularMarketPrice")
+            live_change_pct = info.get("regularMarketChangePercent")
+            
             hist = t.history(period="25d", interval="1d")
             if not hist.empty:
                 latest = hist.iloc[-1]
                 prev = hist.iloc[-2] if len(hist) > 1 else latest
-                pct_change = ((latest["Close"] - prev["Close"]) / prev["Close"]) * 100
+                
+                # Use info if available, fallback to manual calc
+                if live_price is not None and live_change_pct is not None:
+                    current_price = live_price
+                    pct_change = live_change_pct
+                else:
+                    current_price = latest["Close"]
+                    pct_change = ((current_price - prev["Close"]) / prev["Close"]) * 100
+                
                 # 20-day trailing change for regime detection
                 base = hist.iloc[0] if len(hist) >= 20 else prev
-                pct_change_20d = ((latest["Close"] - base["Close"]) / base["Close"]) * 100
+                pct_change_20d = ((current_price - base["Close"]) / base["Close"]) * 100
+                
                 result[name] = {
-                    "price": round(latest["Close"], 2),
+                    "price": round(current_price, 2),
                     "change_pct": round(pct_change, 2),
                     "change_pct_20d": round(pct_change_20d, 2),
-                    "high": round(latest["High"], 2),
-                    "low": round(latest["Low"], 2),
+                    "high": round(info.get("dayHigh") or latest["High"], 2),
+                    "low": round(info.get("dayLow") or latest["Low"], 2),
                 }
         except Exception as e:
             logger.warning(f"Could not fetch index {name}: {e}")
