@@ -243,6 +243,15 @@ async def job_check_signal_outcomes():
     except Exception as e:
         logger.error(f"❌ Meta-learner failed: {e}")
 
+    # Auto-generate and save a PDF accuracy report for today's record
+    try:
+        from backend.engines.report_generator import generate_accuracy_report
+        report_path = await generate_accuracy_report(days=90)
+        logger.info(f"📄 Daily accuracy report saved: {report_path}")
+        _cache["last_updated"]["daily_report"] = datetime.now(IST).isoformat()
+    except Exception as e:
+        logger.error(f"❌ Daily report generation failed: {e}")
+
 
 # ── Scheduler Setup ───────────────────────────────────────────────────────
 
