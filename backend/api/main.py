@@ -13,6 +13,8 @@ from backend.data.scheduler import (
     setup_scheduler, job_refresh_index_data,
     job_refresh_news, job_refresh_fii_dii
 )
+from backend.engines.meta_learner import get_current_adaptive_weights
+from backend.engines.ensemble_scorer import set_adaptive_weights
 
 # Routers
 from backend.api.routes import analysis, market, news, screener, settings as settings_router, learn
@@ -43,6 +45,18 @@ async def lifespan(app: FastAPI):
     await job_refresh_index_data()
     await job_refresh_news()
     await job_refresh_fii_dii()
+
+    # 4. Load adaptive weights from DB (if meta-learner has run before)
+    try:
+        saved_weights = await get_current_adaptive_weights()
+        if saved_weights:
+            set_adaptive_weights(saved_weights)
+            logger.info(f"🧠 Loaded adaptive weights from DB: T={saved_weights.get('T')} F={saved_weights.get('F')} S={saved_weights.get('S')}")
+        else:
+            logger.info("🧠 No adaptive weights found — using regime-based defaults until meta-learner runs")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not load adaptive weights: {e}")
+
     logger.info("✅ Cache warm — ready to serve!")
     
     yield  # Application runs while yielded

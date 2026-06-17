@@ -1,13 +1,38 @@
 """
 ATBot — Ensemble Scorer
 Combines Technical, Fundamental, and Sentiment scores using dynamic weighting
-(Market Regime aware) to output a final 0-100 Composite Score and Trade Signal.
+(Market Regime aware + Meta-Learner adaptive) to output a final 0-100 Composite Score and Trade Signal.
 Generates Price Targets & Stop Loss.
 """
 
+import asyncio
 import logging
+from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# Lazy-loaded adaptive weights cache (refreshed from DB each call)
+_adaptive_weights_cache: Optional[dict] = None
+
+
+def _get_adaptive_weights_sync() -> Optional[dict]:
+    """
+    Sync wrapper to fetch cached adaptive weights.
+    Returns None if meta-learner hasn't run yet.
+    """
+    return _adaptive_weights_cache
+
+
+def set_adaptive_weights(weights: Optional[dict]):
+    """Called by the scheduler after meta-learner runs to update the in-memory cache."""
+    global _adaptive_weights_cache
+    _adaptive_weights_cache = weights
+    if weights:
+        logger.info(
+            f"🧠 [Ensemble] Adaptive weights loaded: "
+            f"T={weights.get('T')} F={weights.get('F')} S={weights.get('S')}"
+        )
+
 
 def determine_market_regime(nifty_change: float, vix: float, nifty_change_20d: float = 0.0) -> str:
     """
@@ -41,16 +66,22 @@ def calculate_composite(
 
     regime = determine_market_regime(nifty_change, vix, nifty_change_20d)
 
-    # Dynamic Weighting based on Regime
-    if regime == "BULL":
-        # In a bull market, momentum and trend (technical) matter most
-        weights = {"T": 0.55, "F": 0.25, "S": 0.20}
-    elif regime == "BEAR":
-        # In a bear market, safety and quality (fundamentals) matter most
-        weights = {"T": 0.35, "F": 0.40, "S": 0.25}
+    # ── Weight Selection: Adaptive > Regime-based ──────────────────────────
+    adaptive = _get_adaptive_weights_sync()
+    weights_source = "adaptive"
+
+    if adaptive and all(k in adaptive for k in ("T", "F", "S")):
+        # Use meta-learner weights (already blended with base during computation)
+        weights = {"T": adaptive["T"], "F": adaptive["F"], "S": adaptive["S"]}
     else:
-        # Sideways/Normal
-        weights = {"T": 0.45, "F": 0.30, "S": 0.25}
+        # Fall back to regime-based static weights
+        weights_source = "regime"
+        if regime == "BULL":
+            weights = {"T": 0.55, "F": 0.25, "S": 0.20}
+        elif regime == "BEAR":
+            weights = {"T": 0.35, "F": 0.40, "S": 0.25}
+        else:
+            weights = {"T": 0.45, "F": 0.30, "S": 0.25}
 
     comp_score = (t_score * weights["T"]) + (f_score * weights["F"]) + (s_score * weights["S"])
     comp_score = round(comp_score, 2)
@@ -133,6 +164,7 @@ def calculate_composite(
         "risk_reward": rr_ratio,
         "position_sizing": position_sizing,
         "weights_used": weights,
+        "weights_source": weights_source,  # "adaptive" or "regime"
         "components": {
             "technical": t_score,
             "fundamental": f_score,

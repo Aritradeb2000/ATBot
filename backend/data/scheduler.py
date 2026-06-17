@@ -23,6 +23,8 @@ from backend.data.nse_live import get_fii_dii_data, get_market_breadth, get_indi
 from backend.data.news_feed import fetch_all_rss_feeds
 from backend.data.fundamentals import fetch_fundamentals_yfinance, get_upcoming_earnings
 from backend.engines.outcome_tracker import run_outcome_check
+from backend.engines.meta_learner import compute_and_save_adaptive_weights, get_current_adaptive_weights
+from backend.engines.ensemble_scorer import set_adaptive_weights
 
 logger = logging.getLogger(__name__)
 
@@ -221,6 +223,7 @@ async def job_check_signal_outcomes():
     """
     Daily at 6:30 PM IST: check price at Day 5 & Day 10 vs each signal's
     stop loss and target. Writes results into signal_outcomes table.
+    After recording outcomes, also triggers the meta-learner.
     """
     logger.info("📊 [Scheduler] Checking signal outcomes (D5/D10)...")
     try:
@@ -229,6 +232,16 @@ async def job_check_signal_outcomes():
         _cache["last_updated"]["signal_outcomes"] = datetime.now(IST).isoformat()
     except Exception as e:
         logger.error(f"❌ Outcome check failed: {e}")
+
+    # After outcomes are updated, re-run meta-learner to refresh adaptive weights
+    try:
+        new_weights = await compute_and_save_adaptive_weights()
+        set_adaptive_weights(new_weights)
+        _cache["adaptive_weights"] = new_weights
+        _cache["last_updated"]["meta_learner"] = datetime.now(IST).isoformat()
+        logger.info("✅ Adaptive weights updated after outcome check")
+    except Exception as e:
+        logger.error(f"❌ Meta-learner failed: {e}")
 
 
 # ── Scheduler Setup ───────────────────────────────────────────────────────

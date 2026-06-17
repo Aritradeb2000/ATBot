@@ -241,6 +241,12 @@ class UserSettings(Base):
     screener_default_universe = Column(String(20), default='nifty50')
     screener_default_sort = Column(String(20), default='score')
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Meta-learner adaptive weights (None = not yet learned; use regime-based base)
+    meta_weight_technical   = Column(Float, nullable=True)
+    meta_weight_fundamental = Column(Float, nullable=True)
+    meta_weight_sentiment   = Column(Float, nullable=True)
+    meta_last_updated       = Column(DateTime, nullable=True)
+    meta_sample_count       = Column(Integer, nullable=True)
 
 
 # -- Signal Outcomes --

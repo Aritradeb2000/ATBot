@@ -214,3 +214,82 @@ async def trigger_outcome_check():
     except Exception as e:
         logger.error(f"Manual outcome check failed: {e}")
         return {"status": "error", "message": str(e)}
+
+
+# ── GET /api/learn/meta-weights ───────────────────────────────────────────────
+
+@router.get("/learn/meta-weights")
+async def get_meta_weights():
+    """
+    Returns the current adaptive engine weights computed by the meta-learner.
+    If meta-learning hasn't run yet, returns the static regime-based defaults.
+    """
+    from backend.engines.meta_learner import get_current_adaptive_weights
+    from backend.engines.ensemble_scorer import _get_adaptive_weights_sync
+
+    # Try in-memory first (fastest)
+    in_memory = _get_adaptive_weights_sync()
+    if in_memory:
+        return {
+            "source": "adaptive",
+            "weights": {
+                "technical":   in_memory["T"],
+                "fundamental": in_memory["F"],
+                "sentiment":   in_memory["S"],
+            },
+            "last_updated": in_memory.get("last_updated"),
+            "sample_count":  in_memory.get("sample_count"),
+            "status": "active",
+        }
+
+    # Fall back to DB
+    db_weights = await get_current_adaptive_weights()
+    if db_weights:
+        return {
+            "source": "adaptive",
+            "weights": {
+                "technical":   db_weights["T"],
+                "fundamental": db_weights["F"],
+                "sentiment":   db_weights["S"],
+            },
+            "last_updated": db_weights.get("last_updated"),
+            "sample_count":  db_weights.get("sample_count"),
+            "status": "active",
+        }
+
+    # No adaptive weights yet — return defaults
+    return {
+        "source": "regime_default",
+        "weights": {
+            "technical":   0.45,
+            "fundamental": 0.30,
+            "sentiment":   0.25,
+        },
+        "last_updated": None,
+        "sample_count": 0,
+        "status": "waiting_for_data",
+        "message": f"Meta-learner needs at least 10 resolved outcomes. Keep using ATBot and it will adapt automatically!"
+    }
+
+
+# ── POST /api/learn/trigger-meta ──────────────────────────────────────────────
+
+@router.post("/learn/trigger-meta")
+async def trigger_meta_learner():
+    """Manually trigger the meta-learner weight recomputation (for testing)."""
+    from backend.engines.meta_learner import compute_and_save_adaptive_weights
+    from backend.engines.ensemble_scorer import set_adaptive_weights
+    try:
+        new_weights = await compute_and_save_adaptive_weights()
+        set_adaptive_weights(new_weights)
+        return {
+            "status": "ok",
+            "new_weights": {
+                "technical":   new_weights.get("T"),
+                "fundamental": new_weights.get("F"),
+                "sentiment":   new_weights.get("S"),
+            }
+        }
+    except Exception as e:
+        logger.error(f"Meta-learner trigger failed: {e}")
+        return {"status": "error", "message": str(e)}
