@@ -3,9 +3,12 @@ ATBot — Learn Endpoint
 Aggregates signal_outcomes into win-rate stats and accuracy trends
 for the ATBot Learn page.
 
-GET /api/learn/stats    → overall stats + by-signal breakdown
-GET /api/learn/recent   → last N outcome records (for the table)
-POST /api/learn/trigger → manually trigger an outcome check (dev use)
+GET /api/learn/stats        → overall stats + by-signal breakdown
+GET /api/learn/recent       → last N outcome records (for the table)
+GET /api/learn/meta-weights → current adaptive engine weights
+GET /api/learn/report       → download PDF accuracy report
+POST /api/learn/trigger     → manually trigger an outcome check (dev use)
+POST /api/learn/trigger-meta → manually trigger meta-learner (dev use)
 """
 
 import logging
@@ -13,6 +16,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 
 from fastapi import APIRouter, Query, Depends
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
@@ -292,4 +296,30 @@ async def trigger_meta_learner():
         }
     except Exception as e:
         logger.error(f"Meta-learner trigger failed: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+# ── GET /api/learn/report ─────────────────────────────────────────────────────
+
+@router.get("/learn/report")
+async def download_accuracy_report(
+    days: int = Query(default=90, ge=7, le=365, description="Lookback window in days"),
+):
+    """
+    Generate and download a PDF accuracy report.
+    Shows win rate, signal breakdown, stock performance, and recent trades.
+    """
+    from backend.engines.report_generator import generate_accuracy_report
+    try:
+        fpath = await generate_accuracy_report(days=days)
+        import os
+        fname = os.path.basename(fpath)
+        return FileResponse(
+            path=fpath,
+            media_type="application/pdf",
+            filename=fname,
+            headers={"Content-Disposition": f"attachment; filename={fname}"}
+        )
+    except Exception as e:
+        logger.error(f"Report generation failed: {e}")
         return {"status": "error", "message": str(e)}

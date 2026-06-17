@@ -130,6 +130,8 @@ export default function LearnPage() {
     { revalidateOnFocus: false }
   );
 
+  const [downloading, setDownloading] = useState(false);
+
   const handleTrigger = async () => {
     setTriggering(true);
     setTriggerMsg("");
@@ -141,6 +143,26 @@ export default function LearnPage() {
       setTriggerMsg("⚠ Check failed — see backend logs");
     } finally {
       setTriggering(false);
+    }
+  };
+
+  const handleDownloadReport = async () => {
+    setDownloading(true);
+    try {
+      const response = await fetch(`http://localhost:8000/api/learn/report?days=${lookback}`);
+      if (!response.ok) throw new Error("Report generation failed");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const date = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `ATBot_Accuracy_Report_${date}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Report generation failed. Make sure there is data in the Learn page.");
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -188,6 +210,13 @@ export default function LearnPage() {
               background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)", color: "#60a5fa",
             }}>
               {triggering ? "Running…" : "⚡ Run Check"}
+            </button>
+            <button onClick={handleDownloadReport} disabled={downloading} style={{
+              padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: downloading ? "not-allowed" : "pointer",
+              background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", color: "#22c55e",
+              display: "flex", alignItems: "center", gap: 5,
+            }}>
+              {downloading ? "Generating…" : "📥 Download Report"}
             </button>
           </div>
         </div>
