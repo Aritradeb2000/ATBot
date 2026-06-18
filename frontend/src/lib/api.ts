@@ -155,3 +155,21 @@ export interface OutcomeRecord { symbol: string; signal: string; entry_date: str
 export async function getLearnStats(days?: number, checkDay?: number): Promise<LearnStats> { const res = await api.get('/api/learn/stats', { params: { days, check_day: checkDay } }); return res.data; }
 export async function getRecentOutcomes(limit?: number): Promise<OutcomeRecord[]> { const res = await api.get('/api/learn/recent', { params: { limit } }); return res.data; }
 export async function triggerOutcomeCheck(): Promise<{ status: string; new_outcomes: number }> { const res = await api.post('/api/learn/trigger'); return res.data; }
+
+// -- Morning Briefing --
+export interface BriefingSignal { symbol: string; signal: string; score: number; price: number | null; confidence: number; }
+export interface GlobalCue { price: number; change_pct: number; }
+export interface MorningBriefing {
+  status?: string;
+  generated_at?: string;
+  market_comment?: string;
+  indices?: { nifty50?: { price: number; change_pct: number }; sensex?: { price: number; change_pct: number } };
+  india_vix?: { vix: number; risk_level: string; risk_comment: string };
+  fii_dii?: { fii_net: number; dii_net: number };
+  global_cues?: Record<string, GlobalCue>;
+  earnings_today?: Array<{ symbol: string; company_name: string; days_away: number }>;
+  earnings_this_week?: Array<{ symbol: string; company_name: string; days_away: number }>;
+  top_signals?: BriefingSignal[];
+}
+export async function getMorningBriefing(): Promise<MorningBriefing> { const res = await api.get('/api/market/briefing'); return res.data; }
+export async function triggerMorningBriefing(): Promise<{ status: string; briefing: MorningBriefing }> { const res = await api.post('/api/market/briefing/trigger'); return res.data; }
