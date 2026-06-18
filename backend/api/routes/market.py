@@ -68,7 +68,20 @@ async def get_market_overview():
 async def get_morning_briefing():
     """Returns today's morning briefing."""
     cache = get_cache()
-    return cache.get("morning_briefing", {"status": "Briefing not generated yet"})
+    return cache.get("morning_briefing", {"status": "not_generated"})
+
+
+@router.post("/market/briefing/trigger")
+async def trigger_morning_briefing():
+    """Manually trigger morning briefing generation (for testing)."""
+    from backend.data.scheduler import job_morning_briefing
+    try:
+        await job_morning_briefing()
+        cache = get_cache()
+        return {"status": "ok", "briefing": cache.get("morning_briefing")}
+    except Exception as e:
+        logger.error(f"Briefing trigger failed: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 # ── NEW: Market Intelligence Endpoints ───────────────────────────────────────

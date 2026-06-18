@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { motion } from "framer-motion";
 import StockCard from "@/components/ui/StockCard";
 import SignalBadge from "@/components/ui/SignalBadge";
+import MorningBriefingPanel from "@/components/ui/MorningBriefingPanel";
 import { analyzeStock, getMarketOverview, type AnalysisResult, type MarketOverview } from "@/lib/api";
 
 import { useEffect } from "react";
@@ -184,10 +185,13 @@ export default function DashboardPage() {
   return (
     <div style={{ maxWidth: 1400 }}>
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 24 }}>
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 24, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>Dashboard</h1>
         <p style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>AI-powered signals for NSE/BSE Indian equities</p>
       </motion.div>
+
+      {/* Morning Briefing Panel */}
+      <MorningBriefingPanel />
 
       {/* Search bar */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} style={{ marginBottom: 24 }}>

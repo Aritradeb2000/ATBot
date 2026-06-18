@@ -170,7 +170,7 @@ async def job_refresh_earnings():
 async def job_morning_briefing():
     """
     Generate the daily morning briefing at 8:45 AM IST.
-    Assembles: global cues, FII/DII, VIX, earnings, top signals.
+    Assembles: global cues, FII/DII, VIX, earnings, indices snapshot, top signals.
     """
     logger.info("🌅 [Scheduler] Generating morning briefing...")
     try:
@@ -178,14 +178,56 @@ async def job_morning_briefing():
         vix_data = get_india_vix()
         fii_dii = _cache.get("fii_dii")
         earnings = _cache.get("upcoming_earnings", [])
+        indices = _cache.get("indices", {})
+
+        # Pull recent top BUY + SELL signals from DB (last 24h)
+        top_signals = []
+        try:
+            from backend.models.database import AsyncSessionLocal
+            from backend.models.schemas import AnalysisScore
+            from sqlalchemy import select
+            from datetime import timedelta
+            cutoff = datetime.now(IST).replace(tzinfo=None) - timedelta(hours=24)
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(AnalysisScore)
+                    .where(AnalysisScore.timestamp >= cutoff)
+                    .where(AnalysisScore.signal.in_(["BUY", "STRONG BUY", "SELL", "STRONG SELL"]))
+                    .order_by(AnalysisScore.composite_score.desc())
+                    .limit(8)
+                )
+                rows = result.scalars().all()
+                # Deduplicate by symbol — keep highest score per unique stock
+                seen: dict = {}
+                for r in rows:
+                    sym = r.symbol
+                    if sym not in seen or (r.composite_score or 0) > seen[sym].composite_score:
+                        seen[sym] = r
+                top_signals = [
+                    {
+                        "symbol": r.symbol,
+                        "signal": r.signal,
+                        "score": round(r.composite_score or 0, 1),
+                        "price": r.current_price,
+                        "confidence": round(r.confidence or 0, 1),
+                    }
+                    for r in sorted(seen.values(), key=lambda x: -(x.composite_score or 0))[:8]
+                ]
+        except Exception as e:
+            logger.warning(f"⚠ Could not fetch top signals for briefing: {e}")
 
         briefing = {
             "generated_at": datetime.now(IST).isoformat(),
             "global_cues": global_cues,
             "india_vix": vix_data,
             "fii_dii": fii_dii,
+            "indices": {
+                "nifty50": indices.get("NIFTY50"),
+                "sensex": indices.get("SENSEX"),
+            },
             "earnings_today": [e for e in earnings if e.get("days_away") == 0],
             "earnings_this_week": earnings,
+            "top_signals": top_signals,
             "market_comment": _generate_market_comment(vix_data, fii_dii),
         }
 
