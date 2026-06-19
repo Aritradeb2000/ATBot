@@ -65,6 +65,39 @@ async def _analyze_one(symbol: str, cache: dict) -> Optional[dict]:
             vix=vix,
         )
 
+        # Persist to database so the meta-learner has more data points
+        try:
+            from backend.models.database import AsyncSessionLocal
+            from backend.models.schemas import AnalysisScore
+            import json
+
+            targets = final.get("targets") or {}
+            score_record = AnalysisScore(
+                symbol=symbol,
+                technical_score=final.get("components", {}).get("technical"),
+                fundamental_score=final.get("components", {}).get("fundamental"),
+                sentiment_score=final.get("components", {}).get("sentiment"),
+                composite_score=final.get("composite_score"),
+                signal=final.get("signal"),
+                confidence=final.get("confidence", 0.8),
+                current_price=tech_result.get("close"),
+                target_low_5d=targets.get("conservative"),
+                target_base_5d=targets.get("base"),
+                target_high_5d=targets.get("aggressive"),
+                target_low_10d=targets.get("conservative"),
+                target_base_10d=targets.get("base"),
+                target_high_10d=targets.get("aggressive"),
+                stop_loss=final.get("stop_loss"),
+                active_signals=json.dumps(tech_result.get("signals", [])),
+                dominant_pattern=tech_result.get("trend"),
+                atr_14=tech_result.get("atr")
+            )
+            async with AsyncSessionLocal() as db:
+                db.add(score_record)
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"Screener: failed to save DB record for {symbol} — {e}")
+
         return {
             "symbol":       symbol,
             "company_name": (fundamentals or {}).get("company_name", symbol),
