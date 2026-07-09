@@ -1,27 +1,26 @@
-import json
-with open(r'C:\Users\aritrad\.gemini\antigravity-ide\brain\0b1ba864-0f49-4973-ae45-77c67342e659\.system_generated\logs\transcript.jsonl', encoding='utf-8') as f:
-    lines = f.readlines()
-content = []
-capturing = False
-for line in reversed(lines):
-    if 'view_file' in line and 'implementation_plan.md' in line and 'response' in line:
-        d = json.loads(line)
-        out = d.get('content', '')
-        if out:
-            # Extract from output
-            lines_out = out.split('\n')
-            for l in lines_out:
-                if l.startswith('The following code has been modified') or l.startswith('File Path:'): continue
-                if ':' in l:
-                    try:
-                        int(l.split(':')[0])
-                        content.append(l.split(':', 1)[1].lstrip(' '))
-                    except:
-                        pass
-            if content:
-                content.reverse()
-                with open(r'C:\Users\aritrad\.gemini\antigravity-ide\brain\0b1ba864-0f49-4973-ae45-77c67342e659\implementation_plan.md', 'w', encoding='utf-8') as f2:
-                    f2.write('\n'.join(content))
-                print('Restored from view_file')
-                exit(0)
+import sqlite3
 
+conn = sqlite3.connect("atbot.db")
+c = conn.cursor()
+
+outcomes = ["WIN", "LOSS"]
+for day in [5, 10]:
+    c.execute(
+        "SELECT count(*) FROM signal_outcomes WHERE check_day=? AND outcome IN (?,?) AND technical_score IS NOT NULL",
+        (day, "WIN", "LOSS")
+    )
+    print(f"Meta-learner eligible D{day}: {c.fetchone()[0]} rows")
+
+print()
+c.execute("SELECT meta_weight_technical, meta_weight_fundamental, meta_weight_sentiment, meta_sample_count FROM user_settings LIMIT 1")
+row = c.fetchone()
+print("Adaptive weights in DB:", row)
+
+print()
+c.execute("SELECT outcome, check_day, signal, symbol, technical_score, fundamental_score, sentiment_score FROM signal_outcomes WHERE outcome IN ('WIN','LOSS')")
+rows = c.fetchall()
+print("All WIN/LOSS rows:")
+for r in rows:
+    print(r)
+
+conn.close()
