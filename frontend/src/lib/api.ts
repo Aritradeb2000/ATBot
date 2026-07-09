@@ -173,3 +173,51 @@ export interface MorningBriefing {
 }
 export async function getMorningBriefing(): Promise<MorningBriefing> { const res = await api.get('/api/market/briefing'); return res.data; }
 export async function triggerMorningBriefing(): Promise<{ status: string; briefing: MorningBriefing }> { const res = await api.post('/api/market/briefing/trigger'); return res.data; }
+
+// -- Portfolio Optimizer --
+export interface OptimizerRequest {
+  amount: number;
+  universe?: string;
+  symbols?: string[];
+  watchlist_symbols?: string[];
+  risk_profile?: 'conservative' | 'moderate' | 'aggressive';
+  max_stocks?: number;
+  min_rr?: number;
+}
+export interface OptimizerAllocation {
+  symbol: string;
+  company_name: string;
+  qty: number;
+  price: number;
+  invested: number;
+  stop_loss: number | null;
+  sl_risk: number;
+  target_base: number | null;
+  gain_amount: number | null;
+  gain_pct: number | null;
+  rr_ratio: number | null;
+  score: number;
+  confidence: number;
+  signal: string;
+  components: { technical: number; fundamental: number; sentiment: number };
+}
+export interface OptimizerResult {
+  status: string;
+  message?: string;
+  total_investment: number;
+  deployed: number;
+  remaining_cash: number;
+  expected_gain: number;
+  expected_gain_pct: number;
+  max_portfolio_risk: number;
+  max_portfolio_risk_pct: number;
+  risk_profile: string;
+  universe: string;
+  scanned: number;
+  qualified: number;
+  allocations: OptimizerAllocation[];
+}
+export async function runOptimizer(req: OptimizerRequest): Promise<OptimizerResult> {
+  const res = await api.post('/api/optimizer/run', req, { timeout: 300000 }); // 5 min timeout
+  return res.data;
+}

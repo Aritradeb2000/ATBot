@@ -7,8 +7,10 @@ import { motion } from "framer-motion";
 const NAV_ITEMS = [
   { href: "/",          icon: "⊞",  label: "Dashboard" },
   { href: "/screener",  icon: "⊙",  label: "Screener" },
+  { href: "/optimizer", icon: "◈",  label: "Optimizer" },
   { href: "/news",      icon: "◉",  label: "News" },
   { href: "/market",    icon: "⊕",  label: "Market" },
+  { href: "/learn",     icon: "⚛",  label: "Learn" },
   { href: "/settings",  icon: "⊘",  label: "Settings" },
 ];
 

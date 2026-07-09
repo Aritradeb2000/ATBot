@@ -17,7 +17,7 @@ from backend.engines.meta_learner import get_current_adaptive_weights
 from backend.engines.ensemble_scorer import set_adaptive_weights
 
 # Routers
-from backend.api.routes import analysis, market, news, screener, settings as settings_router, learn
+from backend.api.routes import analysis, market, news, screener, settings as settings_router, learn, optimizer
 from backend.api.websocket import router as ws_router
 
 # Setup basic logging
@@ -88,6 +88,7 @@ app.include_router(news.router, prefix="/api")
 app.include_router(screener.router, prefix="/api")
 app.include_router(settings_router.router, prefix="/api")
 app.include_router(learn.router, prefix="/api")
+app.include_router(optimizer.router, prefix="/api")
 app.include_router(ws_router)
 
 @app.get("/health")
