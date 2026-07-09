@@ -31,6 +31,27 @@ COLOR_SUBTEXT  = (100, 116, 139)    # slate
 COLOR_HOLD     = (245, 158, 11)     # amber
 
 
+def _safe(text: str) -> str:
+    """Strip characters that fpdf's built-in Helvetica (latin-1) cannot encode."""
+    replacements = {
+        "\u2014": "-",   # em dash
+        "\u2013": "-",   # en dash
+        "\u2022": "*",   # bullet
+        "\u2019": "'",   # right single quote
+        "\u2018": "'",   # left single quote
+        "\u201c": '"',   # left double quote
+        "\u201d": '"',   # right double quote
+        "\u20b9": "Rs.",  # rupee sign
+        "\u2b50": "*",   # star emoji
+        "\u2705": "+",   # checkmark emoji
+        "\u274c": "x",   # cross emoji
+    }
+    for char, replacement in replacements.items():
+        text = text.replace(char, replacement)
+    # Final fallback: drop anything still outside latin-1
+    return text.encode("latin-1", errors="ignore").decode("latin-1")
+
+
 class ATBotReport(FPDF):
     """Custom FPDF class with ATBot branding."""
 
@@ -41,7 +62,7 @@ class ATBotReport(FPDF):
         self.set_font("Helvetica", "B", 14)
         self.set_text_color(*COLOR_ACCENT)
         self.set_xy(10, 6)
-        self.cell(0, 10, "ATBot — AI Signal Accuracy Report", ln=False)
+        self.cell(0, 10, _safe("ATBot - AI Signal Accuracy Report"), ln=False)
         self.set_font("Helvetica", "", 8)
         self.set_text_color(*COLOR_SUBTEXT)
         self.set_xy(10, 14)
@@ -165,10 +186,10 @@ async def generate_accuracy_report(days: int = 90) -> str:
     # ── Section 1: Summary Title ───────────────────────────────────────────────
     pdf.set_font("Helvetica", "B", 18)
     pdf.set_text_color(*COLOR_TEXT)
-    pdf.cell(0, 10, "Signal Accuracy Report", ln=True, align="C")
+    pdf.cell(0, 10, _safe("Signal Accuracy Report"), ln=True, align="C")
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(*COLOR_SUBTEXT)
-    pdf.cell(0, 6, f"Performance over last {days} days  •  {total_signals} signals tracked  •  {total_resolved} resolved", ln=True, align="C")
+    pdf.cell(0, 6, _safe(f"Performance over last {days} days | {total_signals} signals tracked | {total_resolved} resolved"), ln=True, align="C")
     pdf.ln(5)
 
     # ── Section 2: KPI Cards ───────────────────────────────────────────────────
@@ -249,7 +270,7 @@ async def generate_accuracy_report(days: int = 90) -> str:
         for s in stock_stats[:20]:  # Top 20
             wr = s["win_rate"]
             ap = s["avg_pnl"]
-            rating = "⭐ Excellent" if wr >= 70 else ("Good" if wr >= 50 else "Poor")
+            rating = "** Excellent" if wr >= 70 else ("Good" if wr >= 50 else "Poor")
             bg = (18, 30, 50) if alternate else COLOR_CARD
             pdf.set_fill_color(*bg)
             pdf.set_text_color(*COLOR_TEXT)
@@ -292,9 +313,9 @@ async def generate_accuracy_report(days: int = 90) -> str:
 
             pdf.cell(25, 5, entry_date, fill=True, align="C", border=0)
             pdf.cell(30, 5, (r.symbol or "").replace(".NS", ""), fill=True, align="L", border=0)
-            pdf.cell(28, 5, r.signal or "—", fill=True, align="C", border=0)
-            pdf.cell(22, 5, f"₹{r.entry_price:.0f}" if r.entry_price else "—", fill=True, align="R", border=0)
-            pdf.cell(22, 5, f"₹{r.price_at_check:.0f}" if r.price_at_check else "—", fill=True, align="R", border=0)
+            pdf.cell(28, 5, _safe(r.signal or "-"), fill=True, align="C", border=0)
+            pdf.cell(22, 5, f"Rs.{r.entry_price:.0f}" if r.entry_price else "-", fill=True, align="R", border=0)
+            pdf.cell(22, 5, f"Rs.{r.price_at_check:.0f}" if r.price_at_check else "-", fill=True, align="R", border=0)
             pdf.set_text_color(*pnl_color)
             pdf.cell(20, 5, f"{r.pnl_percent:+.1f}%" if r.pnl_percent else "—", fill=True, align="C", border=0)
             pdf.set_text_color(*out_color)
