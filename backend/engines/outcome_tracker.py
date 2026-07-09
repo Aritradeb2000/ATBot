@@ -158,6 +158,16 @@ async def run_outcome_check():
 
             logger.info(f"  D{check_day}: Found {len(scores)} signal(s) for {target_entry_date}")
 
+            # Bug5 fix: deduplicate by symbol — keep only the most recent scan per symbol per day
+            # This prevents multiple screener runs from creating duplicate outcome rows
+            deduped: dict[str, object] = {}
+            for s in scores:
+                sym = s.symbol
+                if sym not in deduped or s.timestamp > deduped[sym].timestamp:
+                    deduped[sym] = s
+            scores = list(deduped.values())
+            logger.info(f"  D{check_day}: After dedup: {len(scores)} unique symbol(s)")
+
             for score in scores:
                 # Skip if already checked for this check_day
                 existing = await db.execute(

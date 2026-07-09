@@ -114,7 +114,7 @@ function NoDataState({ onTrigger, triggering }: { onTrigger: () => void; trigger
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function LearnPage() {
-  const [checkDay, setCheckDay]  = useState<5 | 10>(5);
+  const [checkDay, setCheckDay]  = useState<5 | 10>(10);  // Bug1: default D10 — more data
   const [lookback, setLookback]  = useState(90);
   const [triggering, setTriggering] = useState(false);
   const [triggerMsg, setTriggerMsg] = useState("");
@@ -125,8 +125,8 @@ export default function LearnPage() {
     { revalidateOnFocus: false }
   );
   const { data: recent = [], isLoading: recentLoading } = useSWR<OutcomeRecord[]>(
-    "learn-recent",
-    () => getRecentOutcomes(50),
+    `learn-recent-${checkDay}`,
+    () => getRecentOutcomes(50, checkDay),  // Bug4: pass checkDay filter
     { revalidateOnFocus: false }
   );
 
@@ -389,9 +389,19 @@ export default function LearnPage() {
                     <div style={{ fontSize: 11, color: "#475569" }}>D{r.check_day}</div>
                     <div style={{ fontSize: 11, color: "#94a3b8" }}>₹{r.entry_price?.toLocaleString("en-IN", { maximumFractionDigits: 1 })}</div>
                     <div style={{ fontSize: 11, color: "#94a3b8" }}>₹{r.price_at_check?.toLocaleString("en-IN", { maximumFractionDigits: 1 })}</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: pnlColor(r.pnl_percent) }}>
-                      {r.pnl_percent > 0 ? "+" : ""}{r.pnl_percent?.toFixed(2)}%
-                    </div>
+                    {/* Bug2: For SELL signals, raw pnl_percent is negative when price fell (=WIN for SELL)
+                        Show adjusted display: invert sign for SELLs, add directional label */}
+                    {(() => {
+                      const isSell = r.signal.toUpperCase().includes("SELL");
+                      const displayPnl = isSell ? -(r.pnl_percent ?? 0) : (r.pnl_percent ?? 0);
+                      const displayColor = r.outcome === "WIN" ? "#22c55e" : r.outcome === "LOSS" ? "#ef4444" : "#f59e0b";
+                      return (
+                        <div style={{ fontSize: 12, fontWeight: 700, color: displayColor }}>
+                          {displayPnl > 0 ? "+" : ""}{displayPnl.toFixed(2)}%
+                          {isSell && <span style={{ fontSize: 9, color: "#64748b", marginLeft: 3 }}>(SELL)</span>}
+                        </div>
+                      );
+                    })()}
                     <div style={{
                       fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6, textAlign: "center",
                       background: outcomeColor(r.outcome) + "20",

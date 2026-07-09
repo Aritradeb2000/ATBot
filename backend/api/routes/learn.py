@@ -45,7 +45,7 @@ def _win_rate(outcomes: list[dict]) -> float:
 @router.get("/learn/stats")
 async def get_learn_stats(
     days: int = Query(default=90, ge=7, le=365, description="Look-back window in days"),
-    check_day: int = Query(default=5, ge=5, le=10, description="5 or 10 day outcomes"),
+    check_day: int = Query(default=10, ge=5, le=10, description="5 or 10 day outcomes"),  # Bug1 fix: default D10 has more data
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -142,7 +142,7 @@ async def get_learn_stats(
         "composite":    {"wins_avg": avg_score_for("WIN", "composite_score"),    "losses_avg": avg_score_for("LOSS", "composite_score")},
     }
 
-    # ── Top / worst stocks ────────────────────────────────────────────────────
+    # ── Top / worst stocks (Bug3 fix: separate sort keys, no overlap) ────
     by_stock: dict[str, list] = defaultdict(list)
     for d in resolved:
         by_stock[d["symbol"]].append(d)
@@ -154,9 +154,16 @@ async def get_learn_stats(
             "win_rate": _win_rate(items),
             "avg_pnl":  round(sum(i["pnl_percent"] for i in items) / len(items), 2),
         }
-        for sym, items in by_stock.items() if len(items) >= 2
+        for sym, items in by_stock.items() if len(items) >= 1  # lower threshold for small datasets
     ]
-    stock_stats.sort(key=lambda x: -x["win_rate"])
+
+    # Top stocks: highest win_rate, then best avg_pnl as tiebreaker
+    top_stocks = sorted(stock_stats, key=lambda x: (-x["win_rate"], -x["avg_pnl"]))[:5]
+    top_symbols = {s["symbol"] for s in top_stocks}
+
+    # Worst stocks: lowest win_rate OR most negative avg_pnl — EXCLUDE stocks already in top
+    remaining = [s for s in stock_stats if s["symbol"] not in top_symbols]
+    worst_stocks = sorted(remaining, key=lambda x: (x["win_rate"], x["avg_pnl"]))[:5]
 
     return {
         "total_signals":   len(all_dicts),
@@ -168,8 +175,8 @@ async def get_learn_stats(
         "by_signal":       dict(by_signal),
         "monthly_trend":   monthly_trend,
         "by_component":    by_component,
-        "top_stocks":      stock_stats[:5],
-        "worst_stocks":    list(reversed(stock_stats))[:5],
+        "top_stocks":      top_stocks,
+        "worst_stocks":    worst_stocks,
         "has_data":        True,
     }
 
@@ -179,12 +186,16 @@ async def get_learn_stats(
 @router.get("/learn/recent")
 async def get_recent_outcomes(
     limit: int = Query(default=50, ge=5, le=200),
+    check_day: int = Query(default=10, ge=5, le=10, description="Filter by check day (5 or 10)"),  # Bug4 fix
     db: AsyncSession = Depends(get_db),
 ):
     """Return the most recent resolved signal outcomes."""
     result = await db.execute(
         select(SignalOutcome)
-        .where(SignalOutcome.outcome.in_(["WIN", "LOSS", "BREAKEVEN"]))
+        .where(
+            SignalOutcome.outcome.in_(["WIN", "LOSS", "BREAKEVEN"]),
+            SignalOutcome.check_day == check_day,
+        )
         .order_by(SignalOutcome.entry_date.desc())
         .limit(limit)
     )

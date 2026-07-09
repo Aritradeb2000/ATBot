@@ -153,7 +153,7 @@ export async function saveSettings(data: Partial<UserSettings>): Promise<{ statu
 export interface LearnStats { total_signals: number; total_resolved: number; overall_win_rate: number; avg_pnl_pct: number; avg_pnl_wins: number; avg_loss_pct: number; by_signal: Record<string, { total: number; wins: number; losses: number; win_rate: number; avg_pnl: number }>; monthly_trend: Array<{ month: string; total: number; wins: number; win_rate: number; avg_pnl: number }>; by_component: Record<string, { wins_avg: number; losses_avg: number }>; top_stocks: Array<{ symbol: string; total: number; win_rate: number; avg_pnl: number }>; worst_stocks: Array<{ symbol: string; total: number; win_rate: number; avg_pnl: number }>; has_data: boolean; }
 export interface OutcomeRecord { symbol: string; signal: string; entry_date: string; check_day: number; entry_price: number; price_at_check: number; pnl_percent: number; outcome: string; outcome_detail: string; composite_score: number; }
 export async function getLearnStats(days?: number, checkDay?: number): Promise<LearnStats> { const res = await api.get('/api/learn/stats', { params: { days, check_day: checkDay } }); return res.data; }
-export async function getRecentOutcomes(limit?: number): Promise<OutcomeRecord[]> { const res = await api.get('/api/learn/recent', { params: { limit } }); return res.data; }
+export async function getRecentOutcomes(limit?: number, checkDay?: number): Promise<OutcomeRecord[]> { const res = await api.get('/api/learn/recent', { params: { limit, check_day: checkDay } }); return res.data; }
 export async function triggerOutcomeCheck(): Promise<{ status: string; new_outcomes: number }> { const res = await api.post('/api/learn/trigger'); return res.data; }
 
 // -- Morning Briefing --
