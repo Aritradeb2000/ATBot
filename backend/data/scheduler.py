@@ -259,6 +259,105 @@ def _generate_market_comment(vix_data: dict, fii_dii: dict) -> str:
     return " ".join(filter(None, comments))
 
 
+# ── Daily Auto-Screener Job ───────────────────────────────────────────────
+
+async def job_daily_screener():
+    """
+    Daily at 9:30 AM IST (Mon–Fri): automatically scan all Nifty 50 stocks
+    and save scores to analysis_scores table.
+
+    This is the primary data-collection engine for the meta-learner.
+    ~50 new rows per day → outcome tracker picks them up at D5 and D10
+    → meta-learner adjusts weights automatically.
+    No manual screener interaction needed from the user.
+    """
+    logger.info("🤖 [Scheduler] Starting daily auto-screener (Nifty 50)...")
+    try:
+        import asyncio
+        from backend.data.market_data import fetch_ohlcv
+        from backend.data.fundamentals import fetch_fundamentals_yfinance
+        from backend.data.news_feed import fetch_finnhub_news
+        from backend.engines.technical_engine import analyze_technical
+        from backend.engines.fundamental_engine import analyze_fundamental
+        from backend.engines.sentiment_engine import analyze_sentiment
+        from backend.engines.ensemble_scorer import calculate_composite
+        from backend.models.database import AsyncSessionLocal
+        from backend.models.schemas import AnalysisScore
+        import json
+
+        cache        = _cache
+        indices      = cache.get("indices") or {}
+        nifty_data   = indices.get("NIFTY50") or {}
+        nifty_change = nifty_data.get("change_pct", 0.0)
+        nifty_change_20d = nifty_data.get("change_pct_20d", 0.0)
+        vix_data     = cache.get("india_vix") or {}
+        vix          = vix_data.get("vix", 14.0)
+        fii_dii      = cache.get("fii_dii") or {}
+
+        BATCH_SIZE = 8
+        saved = 0
+        errors = 0
+
+        async def _score_one(symbol: str):
+            nonlocal saved, errors
+            try:
+                loop = asyncio.get_event_loop()
+                ohlcv_df     = await loop.run_in_executor(None, lambda: fetch_ohlcv(symbol, interval="1d", period="6mo"))
+                if ohlcv_df is None or ohlcv_df.empty:
+                    return
+                fundamentals = await loop.run_in_executor(None, lambda: fetch_fundamentals_yfinance(symbol))
+                news         = await loop.run_in_executor(None, lambda: fetch_finnhub_news(symbol))
+
+                tech_result  = analyze_technical(ohlcv_df)
+                fund_result  = analyze_fundamental(fundamentals)
+                sent_result  = analyze_sentiment(news, fii_dii)
+
+                final = calculate_composite(
+                    tech_data=tech_result, fund_data=fund_result, sent_data=sent_result,
+                    nifty_change=nifty_change, nifty_change_20d=nifty_change_20d, vix=vix,
+                )
+
+                targets = final.get("targets") or {}
+                record = AnalysisScore(
+                    symbol=symbol,
+                    technical_score=final.get("components", {}).get("technical"),
+                    fundamental_score=final.get("components", {}).get("fundamental"),
+                    sentiment_score=final.get("components", {}).get("sentiment"),
+                    composite_score=final.get("composite_score"),
+                    signal=final.get("signal"),
+                    confidence=final.get("confidence", 0.8),
+                    current_price=tech_result.get("close"),
+                    target_low_5d=targets.get("conservative"),
+                    target_base_5d=targets.get("base"),
+                    target_high_5d=targets.get("aggressive"),
+                    target_low_10d=targets.get("conservative"),
+                    target_base_10d=targets.get("base"),
+                    target_high_10d=targets.get("aggressive"),
+                    stop_loss=final.get("stop_loss"),
+                    active_signals=json.dumps(tech_result.get("signals", [])),
+                    dominant_pattern=tech_result.get("trend"),
+                    atr_14=tech_result.get("atr"),
+                )
+                async with AsyncSessionLocal() as db:
+                    db.add(record)
+                    await db.commit()
+                saved += 1
+            except Exception as e:
+                logger.warning(f"Auto-screener: skipping {symbol} — {e}")
+                errors += 1
+
+        for i in range(0, len(NIFTY50_SYMBOLS), BATCH_SIZE):
+            batch = NIFTY50_SYMBOLS[i: i + BATCH_SIZE]
+            await asyncio.gather(*[_score_one(s) for s in batch])
+            logger.info(f"  Auto-screener: {min(i + BATCH_SIZE, len(NIFTY50_SYMBOLS))}/{len(NIFTY50_SYMBOLS)} done")
+
+        _cache["last_updated"]["daily_screener"] = datetime.now(IST).isoformat()
+        logger.info(f"✅ Daily auto-screener complete — {saved} saved, {errors} skipped")
+
+    except Exception as e:
+        logger.error(f"❌ Daily auto-screener failed: {e}")
+
+
 # ── Outcome Tracking Job ──────────────────────────────────────────────────
 
 async def job_check_signal_outcomes():
@@ -377,6 +476,15 @@ def setup_scheduler():
         trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=30, timezone=IST),
         id="signal_outcomes",
         name="Signal Outcome Check",
+        replace_existing=True,
+    )
+
+    # Daily 9:30 AM IST (Mon–Fri): Auto-screener — scans Nifty 50, saves to DB for meta-learner
+    scheduler.add_job(
+        job_daily_screener,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=30, timezone=IST),
+        id="daily_screener",
+        name="Daily Auto-Screener (Nifty 50)",
         replace_existing=True,
     )
 
