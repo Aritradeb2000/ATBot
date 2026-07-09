@@ -108,9 +108,10 @@ class ATBotReport(FPDF):
         self.cell(w, 5, label.upper(), align="C")
 
 
-async def generate_accuracy_report(days: int = 90) -> str:
+async def generate_accuracy_report(days: int = 90, check_day: int = 10) -> str:
     """
     Generate a PDF accuracy report and save it to the reports/ directory.
+    check_day: 5 or 10 — must match the dashboard filter (default D10)
     Returns the absolute path to the saved PDF.
     """
     os.makedirs(REPORTS_DIR, exist_ok=True)
@@ -121,7 +122,10 @@ async def generate_accuracy_report(days: int = 90) -> str:
 
         result = await db.execute(
             select(SignalOutcome)
-            .where(SignalOutcome.entry_date >= cutoff)
+            .where(
+                SignalOutcome.entry_date >= cutoff,
+                SignalOutcome.check_day == check_day,   # match dashboard filter
+            )
             .order_by(SignalOutcome.entry_date.desc())
         )
         rows = result.scalars().all()
@@ -189,7 +193,7 @@ async def generate_accuracy_report(days: int = 90) -> str:
     pdf.cell(0, 10, _safe("Signal Accuracy Report"), ln=True, align="C")
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(*COLOR_SUBTEXT)
-    pdf.cell(0, 6, _safe(f"Performance over last {days} days | {total_signals} signals tracked | {total_resolved} resolved"), ln=True, align="C")
+    pdf.cell(0, 6, _safe(f"Performance over last {days} days | Day {check_day} outcomes | {total_signals} signals tracked | {total_resolved} resolved"), ln=True, align="C")
     pdf.ln(5)
 
     # ── Section 2: KPI Cards ───────────────────────────────────────────────────

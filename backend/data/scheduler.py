@@ -387,7 +387,7 @@ async def job_check_signal_outcomes():
     # Auto-generate and save a PDF accuracy report for today's record
     try:
         from backend.engines.report_generator import generate_accuracy_report
-        report_path = await generate_accuracy_report(days=90)
+        report_path = await generate_accuracy_report(days=90, check_day=10)
         logger.info(f"📄 Daily accuracy report saved: {report_path}")
         _cache["last_updated"]["daily_report"] = datetime.now(IST).isoformat()
     except Exception as e:

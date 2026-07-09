@@ -149,14 +149,15 @@ export default function LearnPage() {
   const handleDownloadReport = async () => {
     setDownloading(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/learn/report?days=${lookback}`);
+      // Pass the same check_day filter the user is viewing so PDF matches dashboard
+      const response = await fetch(`http://localhost:8000/api/learn/report?days=${lookback}&check_day=${checkDay}`);
       if (!response.ok) throw new Error("Report generation failed");
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       const date = new Date().toISOString().slice(0, 10);
       a.href = url;
-      a.download = `ATBot_Accuracy_Report_${date}.pdf`;
+      a.download = `ATBot_Accuracy_Report_D${checkDay}_${date}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {

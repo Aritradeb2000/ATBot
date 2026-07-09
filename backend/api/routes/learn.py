@@ -315,14 +315,16 @@ async def trigger_meta_learner():
 @router.get("/learn/report")
 async def download_accuracy_report(
     days: int = Query(default=90, ge=7, le=365, description="Lookback window in days"),
+    check_day: int = Query(default=10, ge=5, le=10, description="5 or 10 day outcomes — must match dashboard filter"),
 ):
     """
     Generate and download a PDF accuracy report.
     Shows win rate, signal breakdown, stock performance, and recent trades.
+    check_day must match what you're viewing on the Learn page (Day 5 or Day 10).
     """
     from backend.engines.report_generator import generate_accuracy_report
     try:
-        fpath = await generate_accuracy_report(days=days)
+        fpath = await generate_accuracy_report(days=days, check_day=check_day)
         import os
         fname = os.path.basename(fpath)
         return FileResponse(
