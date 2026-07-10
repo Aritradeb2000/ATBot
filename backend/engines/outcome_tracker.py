@@ -221,6 +221,7 @@ async def run_outcome_check():
                     pnl_percent         = pnl_percent,
                     outcome             = outcome,
                     outcome_detail      = detail,
+                    regime              = getattr(score, "regime", None) or "SIDEWAYS",  # v2
                 )
                 db.add(outcome_row)
                 checked += 1

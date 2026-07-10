@@ -11,33 +11,32 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Lazy-loaded adaptive weights cache (refreshed from DB each call)
+# Lazy-loaded adaptive weights cache — v2 structure:
+# { "BULL": {T,F,S}, "BEAR": {T,F,S}, "SIDEWAYS": {T,F,S}, "GLOBAL": {T,F,S}, ... }
 _adaptive_weights_cache: Optional[dict] = None
 
 
 def _get_adaptive_weights_sync() -> Optional[dict]:
-    """
-    Sync wrapper to fetch cached adaptive weights.
-    Returns None if meta-learner hasn't run yet.
-    """
+    """Returns full v2 cache dict or None."""
     return _adaptive_weights_cache
 
 
 def set_adaptive_weights(weights: Optional[dict]):
-    """Called by the scheduler after meta-learner runs to update the in-memory cache."""
+    """Called by scheduler after meta-learner v2 runs to update in-memory cache."""
     global _adaptive_weights_cache
     _adaptive_weights_cache = weights
     if weights:
+        g = weights.get("GLOBAL") or weights  # handle v1 dict too
         logger.info(
-            f"🧠 [Ensemble] Adaptive weights loaded: "
-            f"T={weights.get('T')} F={weights.get('F')} S={weights.get('S')}"
+            f"🧠 [Ensemble] Adaptive weights v2 loaded: "
+            f"GLOBAL T={g.get('T')} F={g.get('F')} S={g.get('S')}"
         )
 
 
 def determine_market_regime(nifty_change: float, vix: float, nifty_change_20d: float = 0.0) -> str:
     """
     Determine if market is BULL, BEAR, or SIDEWAYS.
-    Uses 20-day trailing Nifty % change and VIX level for a more stable, 
+    Uses 20-day trailing Nifty % change and VIX level for a more stable,
     trend-based regime that doesn't flip on a single bad day.
     """
     if vix > 22 and nifty_change_20d < -5:
@@ -45,6 +44,15 @@ def determine_market_regime(nifty_change: float, vix: float, nifty_change_20d: f
     elif nifty_change_20d > 3:
         return "BULL"
     return "SIDEWAYS"
+
+
+def _static_regime_weights(regime: str) -> dict:
+    """Hard-coded base weights per regime — used when meta-learner hasn't trained yet."""
+    if regime == "BULL":
+        return {"T": 0.55, "F": 0.25, "S": 0.20}
+    elif regime == "BEAR":
+        return {"T": 0.35, "F": 0.40, "S": 0.25}
+    return {"T": 0.45, "F": 0.30, "S": 0.25}
 
 
 def calculate_composite(
@@ -66,22 +74,24 @@ def calculate_composite(
 
     regime = determine_market_regime(nifty_change, vix, nifty_change_20d)
 
-    # ── Weight Selection: Adaptive > Regime-based ──────────────────────────
+    # ── Weight Selection: Regime-specific v2 > Global v2 > Regime static ──────
     adaptive = _get_adaptive_weights_sync()
-    weights_source = "adaptive"
+    weights_source = "static_regime"
 
-    if adaptive and all(k in adaptive for k in ("T", "F", "S")):
-        # Use meta-learner weights (already blended with base during computation)
-        weights = {"T": adaptive["T"], "F": adaptive["F"], "S": adaptive["S"]}
-    else:
-        # Fall back to regime-based static weights
-        weights_source = "regime"
-        if regime == "BULL":
-            weights = {"T": 0.55, "F": 0.25, "S": 0.20}
-        elif regime == "BEAR":
-            weights = {"T": 0.35, "F": 0.40, "S": 0.25}
+    if adaptive:
+        # v2 structure: has per-regime keys
+        regime_weights = adaptive.get(regime) or adaptive.get("GLOBAL")
+        if regime_weights and all(k in regime_weights for k in ("T", "F", "S")):
+            weights = {"T": regime_weights["T"], "F": regime_weights["F"], "S": regime_weights["S"]}
+            weights_source = f"adaptive_v2_{regime.lower()}"
+        elif all(k in adaptive for k in ("T", "F", "S")):  # v1 fallback
+            weights = {"T": adaptive["T"], "F": adaptive["F"], "S": adaptive["S"]}
+            weights_source = "adaptive_v1_global"
         else:
-            weights = {"T": 0.45, "F": 0.30, "S": 0.25}
+            # No valid adaptive weights — use static regime defaults
+            weights = _static_regime_weights(regime)
+    else:
+        weights = _static_regime_weights(regime)
 
     comp_score = (t_score * weights["T"]) + (f_score * weights["F"]) + (s_score * weights["S"])
     comp_score = round(comp_score, 2)

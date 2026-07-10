@@ -7,6 +7,158 @@ import {
   type LearnStats, type OutcomeRecord,
 } from "@/lib/api";
 
+// ── Meta-Learner v2 Types ─────────────────────────────────────────────────────
+interface RegimeWeightInfo { T: number; F: number; S: number; samples: number; status: string; is_active: boolean; }
+interface MetaWeightsV2 {
+  version: string; source: string; status: string;
+  current_regime: string; last_updated: string | null;
+  total_samples: number; ewma: { lambda: number; half_life_days: number };
+  min_samples_per_regime: number;
+  regime_weights: { BULL: RegimeWeightInfo; BEAR: RegimeWeightInfo; SIDEWAYS: RegimeWeightInfo };
+  global_weights: { T: number; F: number; S: number };
+  message?: string;
+}
+
+// ── Meta-Learner v2 Card ──────────────────────────────────────────────────────
+function MetaLearnerV2Card() {
+  const { data: mw } = useSWR<MetaWeightsV2>(
+    "meta-weights-v2",
+    () => fetch("http://localhost:8000/api/learn/meta-weights").then(r => r.json()),
+    { revalidateOnFocus: false, refreshInterval: 60000 }
+  );
+
+  const regimeColors: Record<string, string> = { BULL: "#22c55e", BEAR: "#ef4444", SIDEWAYS: "#f59e0b" };
+  const regimeIcons: Record<string, string> = { BULL: "📈", BEAR: "📉", SIDEWAYS: "➡️" };
+  const statusColor = (s: string) => s === "mature" ? "#22c55e" : s === "learning" ? "#f59e0b" : "#475569";
+  const statusLabel = (s: string) => s === "mature" ? "Mature" : s === "learning" ? "Learning" : "Waiting";
+
+  const minN = mw?.min_samples_per_regime ?? 3;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
+      className="glass-card p-6" style={{ gridColumn: "1 / -1" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em" }}>META-LEARNER v2 — ADAPTIVE WEIGHTS</div>
+          <div style={{ fontSize: 11, color: "#334155", marginTop: 4 }}>
+            Regime-conditioned weights · EWMA λ={mw?.ewma.lambda ?? 0.92} (half-life {mw?.ewma.half_life_days ?? 8}d) · Confidence-weighted
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {mw?.current_regime && (
+            <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 6,
+              background: regimeColors[mw.current_regime] + "20",
+              border: `1px solid ${regimeColors[mw.current_regime]}40`,
+              color: regimeColors[mw.current_regime] }}>
+              {regimeIcons[mw.current_regime]} Active: {mw.current_regime}
+            </span>
+          )}
+          <span style={{ fontSize: 10, color: mw?.status === "active" ? "#22c55e" : "#475569",
+            padding: "3px 8px", borderRadius: 4, background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)" }}>
+            {mw?.status === "active" ? "● ACTIVE" : "○ TRAINING"}
+          </span>
+        </div>
+      </div>
+
+      {/* Global weights bar */}
+      {mw?.global_weights && (
+        <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 8, background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#6366f1", marginBottom: 8, letterSpacing: "0.07em" }}>GLOBAL WEIGHTS (sample-count weighted average)</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {(["T", "F", "S"] as const).map(k => {
+              const labels: Record<string, string> = { T: "Technical", F: "Fundamental", S: "Sentiment" };
+              const pct = Math.round((mw.global_weights[k] ?? 0) * 100);
+              const cols = ["#3b82f6", "#a855f7", "#10b981"];
+              const ci = ["T", "F", "S"].indexOf(k);
+              return (
+                <div key={k} style={{ flex: 1 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94a3b8", marginBottom: 3 }}>
+                    <span>{labels[k]}</span><span style={{ fontWeight: 700, color: cols[ci] }}>{pct}%</span>
+                  </div>
+                  <div style={{ height: 4, borderRadius: 99, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                    <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.7 }}
+                      style={{ height: "100%", background: cols[ci], borderRadius: 99 }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Per-regime grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+        {(["BULL", "BEAR", "SIDEWAYS"] as const).map(regime => {
+          const rw = mw?.regime_weights?.[regime];
+          const isActive = rw?.is_active ?? false;
+          const samples = rw?.samples ?? 0;
+          const regimeColor = regimeColors[regime];
+          return (
+            <div key={regime} style={{ padding: 14, borderRadius: 10,
+              background: isActive ? regimeColor + "10" : "rgba(255,255,255,0.03)",
+              border: isActive ? `1.5px solid ${regimeColor}50` : "1px solid rgba(255,255,255,0.07)",
+              position: "relative" }}>
+              {isActive && (
+                <div style={{ position: "absolute", top: 8, right: 8, fontSize: 9, fontWeight: 700,
+                  color: regimeColor, background: regimeColor + "20", padding: "2px 6px", borderRadius: 4 }}>ACTIVE</div>
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                <span style={{ fontSize: 16 }}>{regimeIcons[regime]}</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: regimeColor }}>{regime}</div>
+                  <div style={{ fontSize: 9, color: statusColor(rw?.status ?? "") }}>
+                    {statusLabel(rw?.status ?? "")} · {samples}/{Math.max(samples, minN)} samples
+                  </div>
+                </div>
+              </div>
+
+              {/* Sample progress bar */}
+              <div style={{ height: 3, borderRadius: 99, background: "rgba(255,255,255,0.06)", overflow: "hidden", marginBottom: 12 }}>
+                <motion.div initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(100, (samples / Math.max(minN, 1)) * 100)}%` }}
+                  transition={{ duration: 0.8 }}
+                  style={{ height: "100%", background: statusColor(rw?.status ?? ""), borderRadius: 99 }} />
+              </div>
+
+              {/* Weight bars */}
+              {(["T", "F", "S"] as const).map(k => {
+                const labels: Record<string, string> = { T: "Tech", F: "Fund", S: "Sent" };
+                const pct = Math.round(((rw?.[k] as number) ?? 0) * 100);
+                const bCols = ["#3b82f6", "#a855f7", "#10b981"];
+                const ci = ["T", "F", "S"].indexOf(k);
+                return (
+                  <div key={k} style={{ marginBottom: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#64748b", marginBottom: 2 }}>
+                      <span>{labels[k]}</span>
+                      <span style={{ fontWeight: 700, color: pct > 40 ? bCols[ci] : "#64748b" }}>{pct}%</span>
+                    </div>
+                    <div style={{ height: 5, borderRadius: 99, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.6, delay: 0.1 * ci }}
+                        style={{ height: "100%", background: bCols[ci], opacity: isActive ? 1 : 0.5, borderRadius: 99 }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      {mw?.message && (
+        <div style={{ marginTop: 12, fontSize: 11, color: "#475569", textAlign: "center" }}>{mw.message}</div>
+      )}
+      {mw?.last_updated && (
+        <div style={{ marginTop: 8, fontSize: 10, color: "#334155", textAlign: "right" }}>
+          Last trained: {new Date(mw.last_updated).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST
+          · {mw.total_samples} total samples
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const outcomeColor = (o: string) =>
   o === "WIN" ? "#22c55e" : o === "LOSS" ? "#ef4444" : o === "BREAKEVEN" ? "#f59e0b" : "#64748b";
@@ -361,6 +513,9 @@ export default function LearnPage() {
               ))}
             </motion.div>
           </div>
+
+          {/* ── Meta-Learner v2 Card (full width) ───────────────────────── */}
+          <MetaLearnerV2Card />
 
           {/* ── Row 4: Recent outcomes table ──────────────────────────── */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card p-6">

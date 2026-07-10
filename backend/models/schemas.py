@@ -116,6 +116,9 @@ class AnalysisScore(Base):
     # ATR for context
     atr_14 = Column(Float)
 
+    # Market regime at time of analysis (Meta-Learner v2)
+    regime = Column(String(10), nullable=True)   # BULL / BEAR / SIDEWAYS
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
@@ -241,12 +244,29 @@ class UserSettings(Base):
     screener_default_universe = Column(String(20), default='nifty50')
     screener_default_sort = Column(String(20), default='score')
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    # Meta-learner adaptive weights (None = not yet learned; use regime-based base)
+    # Meta-learner v1: single global adaptive weights (None = not yet learned)
     meta_weight_technical   = Column(Float, nullable=True)
     meta_weight_fundamental = Column(Float, nullable=True)
     meta_weight_sentiment   = Column(Float, nullable=True)
     meta_last_updated       = Column(DateTime, nullable=True)
     meta_sample_count       = Column(Integer, nullable=True)
+
+    # Meta-learner v2: per-regime weight sets (BULL / BEAR / SIDEWAYS)
+    # BULL regime weights
+    meta_bull_T = Column(Float, nullable=True)
+    meta_bull_F = Column(Float, nullable=True)
+    meta_bull_S = Column(Float, nullable=True)
+    meta_bull_n = Column(Integer, nullable=True)   # sample count for BULL
+    # BEAR regime weights
+    meta_bear_T = Column(Float, nullable=True)
+    meta_bear_F = Column(Float, nullable=True)
+    meta_bear_S = Column(Float, nullable=True)
+    meta_bear_n = Column(Integer, nullable=True)
+    # SIDEWAYS regime weights
+    meta_side_T = Column(Float, nullable=True)
+    meta_side_F = Column(Float, nullable=True)
+    meta_side_S = Column(Float, nullable=True)
+    meta_side_n = Column(Integer, nullable=True)
 
 
 # -- Signal Outcomes --
@@ -274,5 +294,6 @@ class SignalOutcome(Base):
     pnl_percent = Column(Float)          # % P&L
     outcome = Column(String(20), index=True)  # WIN / LOSS / BREAKEVEN / OPEN
     outcome_detail = Column(String(50))       # e.g. TARGET_HIT / SL_HIT / PARTIAL
+    regime = Column(String(10), nullable=True)  # Market regime at signal time (v2)
     created_at = Column(DateTime, default=datetime.utcnow)
     __table_args__ = (UniqueConstraint('analysis_score_id', 'check_day', name='uq_outcome_score_day'),)

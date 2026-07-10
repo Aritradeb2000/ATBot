@@ -218,7 +218,7 @@ async def get_recent_outcomes(
     ]
 
 
-# ── POST /api/learn/trigger ───────────────────────────────────────────────────
+# -- POST /api/learn/trigger ---------------------------------------------------
 
 @router.post("/learn/trigger")
 async def trigger_outcome_check():
@@ -231,59 +231,73 @@ async def trigger_outcome_check():
         return {"status": "error", "message": str(e)}
 
 
-# ── GET /api/learn/meta-weights ───────────────────────────────────────────────
-
 @router.get("/learn/meta-weights")
 async def get_meta_weights():
     """
-    Returns the current adaptive engine weights computed by the meta-learner.
-    If meta-learning hasn't run yet, returns the static regime-based defaults.
+    Returns v2 adaptive weights: per-regime (BULL/BEAR/SIDEWAYS), global fallback,
+    sample counts, EWMA config, and current active regime.
     """
-    from backend.engines.meta_learner import get_current_adaptive_weights
-    from backend.engines.ensemble_scorer import _get_adaptive_weights_sync
+    from backend.engines.meta_learner import get_current_adaptive_weights, BASE_WEIGHTS, MIN_SAMPLES_PER_REGIME, EWMA_LAMBDA
+    from backend.engines.ensemble_scorer import _get_adaptive_weights_sync, determine_market_regime
+    import math
 
-    # Try in-memory first (fastest)
-    in_memory = _get_adaptive_weights_sync()
-    if in_memory:
+    half_life_days = round(math.log(0.5) / math.log(EWMA_LAMBDA), 1)
+
+    # Current market regime for highlighting active weights
+    try:
+        from backend.data.scheduler import get_cache
+        cache = get_cache()
+        indices = cache.get("indices") or {}
+        nifty = indices.get("NIFTY50") or {}
+        vix_data = cache.get("india_vix") or {}
+        current_regime = determine_market_regime(
+            nifty.get("change_pct", 0.0),
+            vix_data.get("vix", 14.0),
+            nifty.get("change_pct_20d", 0.0),
+        )
+    except Exception:
+        current_regime = "SIDEWAYS"
+
+    raw = _get_adaptive_weights_sync() or await get_current_adaptive_weights()
+    ewma_config = {"lambda": EWMA_LAMBDA, "half_life_days": half_life_days}
+
+    def regime_status(n):
+        if n >= 30: return "mature"
+        if n >= MIN_SAMPLES_PER_REGIME: return "learning"
+        return "insufficient"
+
+    if raw and raw.get("BULL"):
+        sample_counts = raw.get("sample_counts", {})
         return {
-            "source": "adaptive",
-            "weights": {
-                "technical":   in_memory["T"],
-                "fundamental": in_memory["F"],
-                "sentiment":   in_memory["S"],
+            "version": "v2", "source": "adaptive", "status": "active",
+            "current_regime": current_regime,
+            "last_updated": raw.get("last_updated"),
+            "total_samples": raw.get("sample_count", sum(sample_counts.values())),
+            "ewma": ewma_config,
+            "min_samples_per_regime": MIN_SAMPLES_PER_REGIME,
+            "regime_weights": {
+                "BULL": {**raw["BULL"], "samples": sample_counts.get("BULL", 0),
+                         "status": regime_status(sample_counts.get("BULL", 0)), "is_active": current_regime == "BULL"},
+                "BEAR": {**raw["BEAR"], "samples": sample_counts.get("BEAR", 0),
+                         "status": regime_status(sample_counts.get("BEAR", 0)), "is_active": current_regime == "BEAR"},
+                "SIDEWAYS": {**raw["SIDEWAYS"], "samples": sample_counts.get("SIDEWAYS", 0),
+                             "status": regime_status(sample_counts.get("SIDEWAYS", 0)), "is_active": current_regime == "SIDEWAYS"},
             },
-            "last_updated": in_memory.get("last_updated"),
-            "sample_count":  in_memory.get("sample_count"),
-            "status": "active",
+            "global_weights": raw.get("GLOBAL", {"T": raw.get("T"), "F": raw.get("F"), "S": raw.get("S")}),
+            "base_weights": BASE_WEIGHTS,
         }
 
-    # Fall back to DB
-    db_weights = await get_current_adaptive_weights()
-    if db_weights:
-        return {
-            "source": "adaptive",
-            "weights": {
-                "technical":   db_weights["T"],
-                "fundamental": db_weights["F"],
-                "sentiment":   db_weights["S"],
-            },
-            "last_updated": db_weights.get("last_updated"),
-            "sample_count":  db_weights.get("sample_count"),
-            "status": "active",
-        }
-
-    # No adaptive weights yet — return defaults
     return {
-        "source": "regime_default",
-        "weights": {
-            "technical":   0.45,
-            "fundamental": 0.30,
-            "sentiment":   0.25,
+        "version": "v2", "source": "static_base", "status": "waiting_for_data",
+        "current_regime": current_regime, "last_updated": None, "total_samples": 0,
+        "ewma": ewma_config, "min_samples_per_regime": MIN_SAMPLES_PER_REGIME,
+        "regime_weights": {
+            r: {**w, "samples": 0, "status": "insufficient", "is_active": r == current_regime}
+            for r, w in BASE_WEIGHTS.items()
         },
-        "last_updated": None,
-        "sample_count": 0,
-        "status": "waiting_for_data",
-        "message": f"Meta-learner needs at least 10 resolved outcomes. Keep using ATBot and it will adapt automatically!"
+        "global_weights": {"T": 0.45, "F": 0.30, "S": 0.25},
+        "base_weights": BASE_WEIGHTS,
+        "message": f"Needs {MIN_SAMPLES_PER_REGIME}+ resolved outcomes per regime. Bot accumulates data automatically at 9:30 AM daily.",
     }
 
 

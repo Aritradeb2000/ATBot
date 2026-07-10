@@ -294,6 +294,11 @@ async def job_daily_screener():
         vix          = vix_data.get("vix", 14.0)
         fii_dii      = cache.get("fii_dii") or {}
 
+        # Determine today's market regime for labelling (Meta-Learner v2)
+        from backend.engines.ensemble_scorer import determine_market_regime
+        today_regime = determine_market_regime(nifty_change, vix, nifty_change_20d)
+        logger.info(f"  Auto-screener: today's regime = {today_regime}")
+
         BATCH_SIZE = 8
         saved = 0
         errors = 0
@@ -337,6 +342,7 @@ async def job_daily_screener():
                     active_signals=json.dumps(tech_result.get("signals", [])),
                     dominant_pattern=tech_result.get("trend"),
                     atr_14=tech_result.get("atr"),
+                    regime=today_regime,  # v2: label regime at time of scan
                 )
                 async with AsyncSessionLocal() as db:
                     db.add(record)
