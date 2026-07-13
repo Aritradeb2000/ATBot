@@ -72,19 +72,9 @@ settings = get_settings()
 # ── Timezone shortcut ────────────────────────────────────────────────────
 IST = pytz.timezone(settings.market_timezone)
 
-# ── Default Nifty 50 symbols (NSE format for yfinance) ───────────────────
-NIFTY50_SYMBOLS: List[str] = [
-    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "BHARTIARTL.NS", "ICICIBANK.NS",
-    "INFOSYS.NS", "SBIN.NS", "HINDUNILVR.NS", "ITC.NS", "KOTAKBANK.NS",
-    "LT.NS", "HCLTECH.NS", "BAJFINANCE.NS", "ASIANPAINT.NS", "AXISBANK.NS",
-    "MARUTI.NS", "SUNPHARMA.NS", "TITAN.NS", "NESTLEIND.NS", "WIPRO.NS",
-    "ULTRACEMCO.NS", "NTPC.NS", "POWERGRID.NS", "ONGC.NS", "ADANIENT.NS",
-    "M&M.NS", "BAJAJFINSV.NS", "JSWSTEEL.NS", "TATACONSUM.NS", "TATAMOTORS.NS",
-    "HDFCLIFE.NS", "SBILIFE.NS", "TECHM.NS", "GRASIM.NS", "INDUSINDBK.NS",
-    "BRITANNIA.NS", "APOLLOHOSP.NS", "COALINDIA.NS", "CIPLA.NS", "EICHERMOT.NS",
-    "DRREDDY.NS", "ADANIPORTS.NS", "BPCL.NS", "TATASTEELS.NS", "HEROMOTOCO.NS",
-    "DIVISLAB.NS", "HINDALCO.NS", "BAJAJ-AUTO.NS", "SHRIRAMFIN.NS", "BEL.NS"
-]
+# ── NSE symbol lists — canonical source is backend/data/nse_universe.py ──────
+# Re-exported here for backward compatibility with existing imports.
+from backend.data.nse_universe import NIFTY50 as NIFTY50_SYMBOLS, NIFTY200, get_universe  # noqa: F401
 
 # ── Index tickers (yfinance) ─────────────────────────────────────────────
 INDEX_TICKERS = {

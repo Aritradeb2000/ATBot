@@ -52,6 +52,8 @@ function Chip({ color, children }: { color: string; children: React.ReactNode })
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
+type Universe = "nifty50" | "nifty200" | "watchlist";
+
 export default function ScreenerPage() {
   const [preset, setPreset]         = useState<Preset>("custom");
   const [signal, setSignal]         = useState<SignalFilter>("ALL");
@@ -59,16 +61,17 @@ export default function ScreenerPage() {
   const [minRsi, setMinRsi]         = useState(0);
   const [maxRsi, setMaxRsi]         = useState(100);
   const [sortBy, setSortBy]         = useState<SortBy>("score");
-  const [universe, setUniverse]     = useState<"nifty50" | "watchlist">("nifty50");
+  const [universe, setUniverse]     = useState<Universe>("nifty50");
   const [watchlistSyms, setWatchlistSyms] = useState<string>("");
 
   const [results, setResults]       = useState<ScreenerResult[]>([]);
-  const [meta, setMeta]             = useState<{ scanned: number; found: number; filtered: number } | null>(null);
+  const [meta, setMeta]             = useState<{ scanned: number; found: number; filtered: number; data_source?: string; last_computed?: string } | null>(null);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [hasScanned, setHasScanned] = useState(false);
+  const [nightlyStatus, setNightlyStatus] = useState<{ status: string; completed_at: string | null; saved: number; duration_s: number | null } | null>(null);
 
-  // Load watchlist from localStorage for the "My Watchlist" universe option
+  // Load watchlist from localStorage
   useEffect(() => {
     try {
       const stored = localStorage.getItem("atbot_watchlist");
@@ -76,29 +79,40 @@ export default function ScreenerPage() {
     } catch { /* ignore */ }
   }, []);
 
+  // Fetch nightly status on mount
+  useEffect(() => {
+    fetch("http://localhost:8000/api/screener/status")
+      .then(r => r.json())
+      .then(d => setNightlyStatus(d))
+      .catch(() => null);
+  }, []);
+
+  // Auto-load pre-computed results when universe changes to nifty50 or nifty200
+  useEffect(() => {
+    if (universe === "nifty50" || universe === "nifty200") {
+      handleScan();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [universe]);
+
   const handleScan = async () => {
     setLoading(true);
     setError(null);
     setHasScanned(true);
 
+    const isCustom = universe === "watchlist";
     const params: ScreenerParams = {
-      universe: universe === "watchlist" ? "custom" : "nifty50",
-      signal:   signal,
-      min_score: minScore,
-      min_rsi:   minRsi,
-      max_rsi:   maxRsi,
-      preset:    preset,
-      sort_by:   sortBy,
+      universe: isCustom ? "custom" : universe,
+      signal, min_score: minScore, min_rsi: minRsi, max_rsi: maxRsi, preset, sort_by: sortBy,
     };
-    if (universe === "watchlist" && watchlistSyms) {
-      params.symbols = watchlistSyms;
-    }
+    if (isCustom && watchlistSyms) params.symbols = watchlistSyms;
 
     try {
       const data = await runScreener(params);
       setResults(data.results);
-      setMeta({ scanned: data.total_scanned, found: data.total_found, filtered: data.total_filtered });
-    } catch (e) {
+      setMeta({ scanned: data.total_scanned, found: data.total_found, filtered: data.total_filtered,
+        data_source: (data as any).data_source, last_computed: (data as any).last_computed });
+    } catch {
       setError("Scan failed. Make sure the backend is running.");
     } finally {
       setLoading(false);
@@ -106,16 +120,48 @@ export default function ScreenerPage() {
   };
 
   const SIGNAL_OPTIONS: SignalFilter[] = ["ALL", "STRONG BUY", "BUY", "HOLD", "SELL", "STRONG SELL"];
+  const universeLabel = universe === "nifty50" ? "Nifty 50 (50 stocks)" : universe === "nifty200" ? "Nifty 200 (200 stocks)" : "My Watchlist";
 
   return (
     <div style={{ maxWidth: 1300 }}>
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 24 }}>
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 16 }}>
         <h1 style={{ fontSize: 24, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>Screener</h1>
         <p style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
-          Filter and rank NSE stocks by AI composite score · {universe === "nifty50" ? "Nifty 50 (50 stocks)" : "My Watchlist"}
+          Filter and rank NSE stocks by AI composite score · {universeLabel}
         </p>
       </motion.div>
+
+      {/* Nightly status banner */}
+      {nightlyStatus && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          style={{ marginBottom: 16, padding: "8px 14px", borderRadius: 10,
+            background: nightlyStatus.status === "completed" ? "rgba(34,197,94,0.07)" : nightlyStatus.status === "running" ? "rgba(59,130,246,0.07)" : "rgba(255,255,255,0.03)",
+            border: nightlyStatus.status === "completed" ? "1px solid rgba(34,197,94,0.2)" : nightlyStatus.status === "running" ? "1px solid rgba(59,130,246,0.2)" : "1px solid rgba(255,255,255,0.07)",
+            display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 12 }}>
+            {nightlyStatus.status === "running" && <span style={{ color: "#60a5fa" }}>⏳ Nightly pre-computation running…</span>}
+            {nightlyStatus.status === "completed" && (
+              <span style={{ color: "#22c55e" }}>
+                ✅ Pre-computed · {nightlyStatus.saved} stocks scored
+                {nightlyStatus.completed_at && (
+                  <> · {new Date(nightlyStatus.completed_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" })}</>
+                )}
+                {nightlyStatus.duration_s && <> · {nightlyStatus.duration_s}s</>}
+              </span>
+            )}
+            {nightlyStatus.status === "idle" && <span style={{ color: "#475569" }}>🌙 Nightly scan runs at 4:00 PM IST weekdays</span>}
+            {nightlyStatus.status === "failed" && <span style={{ color: "#ef4444" }}>⚠️ Last nightly scan failed — showing cached data</span>}
+          </div>
+          {meta?.data_source && (
+            <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 5,
+              background: meta.data_source === "precomputed" ? "rgba(34,197,94,0.15)" : "rgba(99,102,241,0.15)",
+              color: meta.data_source === "precomputed" ? "#22c55e" : "#a5b4fc" }}>
+              {meta.data_source === "precomputed" ? "⚡ INSTANT" : "🔴 LIVE"}
+            </span>
+          )}
+        </motion.div>
+      )}
 
       {/* Preset strategy pills */}
       <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
@@ -151,19 +197,21 @@ export default function ScreenerPage() {
           {/* Universe */}
           <div style={{ marginBottom: 20 }}>
             <label style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>UNIVERSE</label>
-            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-              {(["nifty50", "watchlist"] as const).map((u) => (
-                <button
-                  key={u}
-                  onClick={() => setUniverse(u)}
-                  style={{
-                    flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                    background: universe === u ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.04)",
-                    border: universe === u ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.08)",
-                    color: universe === u ? "#60a5fa" : "#64748b",
-                  }}
-                >
-                  {u === "nifty50" ? "Nifty 50" : "Watchlist"}
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+              {([
+                { id: "nifty50"  as const, label: "Nifty 50",  sub: "50 stocks · instant" },
+                { id: "nifty200" as const, label: "Nifty 200", sub: "200 stocks · instant" },
+                { id: "watchlist" as const, label: "My Watchlist", sub: "custom · live" },
+              ]).map((u) => (
+                <button key={u.id} onClick={() => setUniverse(u.id)} style={{
+                  padding: "7px 10px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                  background: universe === u.id ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.04)",
+                  border: universe === u.id ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.08)",
+                  color: universe === u.id ? "#60a5fa" : "#64748b",
+                  textAlign: "left",
+                }}>
+                  {u.label}
+                  <div style={{ fontSize: 9, fontWeight: 400, color: universe === u.id ? "#93c5fd" : "#334155", marginTop: 2 }}>{u.sub}</div>
                 </button>
               ))}
             </div>
@@ -250,11 +298,16 @@ export default function ScreenerPage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <span style={{ fontSize: 13, color: "#475569" }}>
               {loading
-                ? `⏳ Scanning ${universe === "nifty50" ? "50" : "your watchlist"} stocks…`
+                ? `⏳ ${universe === "nifty200" ? "Loading 200 stocks" : universe === "nifty50" ? "Loading 50 stocks" : "Scanning watchlist"}…`
                 : meta
-                  ? `${meta.filtered} results  ·  ${meta.found} analysed  ·  ${meta.scanned} scanned`
-                  : "Click ▶ Run Scan to start"}
+                  ? `${meta.filtered} results · ${meta.found} analysed · ${meta.scanned} scanned`
+                  : "Loading pre-computed data…"}
             </span>
+            {meta?.last_computed && (
+              <span style={{ fontSize: 10, color: "#334155" }}>
+                Computed: {new Date(meta.last_computed).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })} IST
+              </span>
+            )}
           </div>
 
           {/* Loading skeletons */}
@@ -282,13 +335,13 @@ export default function ScreenerPage() {
             </div>
           )}
 
-          {/* Pre-scan prompt */}
-          {!loading && !error && !hasScanned && (
+          {/* Pre-scan prompt — only for watchlist in pre-compute mode */}
+          {!loading && !error && !hasScanned && universe === "watchlist" && (
             <div className="glass-card p-10" style={{ textAlign: "center" }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>📡</div>
               <p style={{ color: "#64748b", fontSize: 14, fontWeight: 600 }}>Set your filters and click Run Scan</p>
               <p style={{ color: "#334155", fontSize: 12, marginTop: 6 }}>
-                Nifty 50 scan takes ~15–25 seconds. Results are sorted by AI composite score.
+                Watchlist scan runs live and takes ~10–20 seconds.
               </p>
             </div>
           )}

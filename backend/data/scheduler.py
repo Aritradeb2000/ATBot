@@ -44,6 +44,19 @@ _cache = {
     "upcoming_earnings": [],
     "morning_briefing": None,
     "last_updated": {},
+    # Nightly pre-computation status
+    "nightly_status": {
+        "status": "idle",          # idle | running | completed | failed
+        "started_at": None,
+        "completed_at": None,
+        "universe": "nifty200",
+        "total": 0,
+        "saved": 0,
+        "skipped": 0,
+        "progress_pct": 0,
+        "duration_s": None,
+        "next_run": None,
+    },
 }
 
 
@@ -364,6 +377,140 @@ async def job_daily_screener():
         logger.error(f"❌ Daily auto-screener failed: {e}")
 
 
+# ── Nightly Pre-Computation Job ───────────────────────────────────────────────
+
+async def job_nightly_precompute(universe_name: str = "nifty200"):
+    """
+    Daily at 4:00 PM IST (Mon–Fri): Pre-compute scores for full Nifty 200.
+    Results saved to analysis_scores DB. Screener reads from there instantly.
+
+    Progress tracked in _cache['nightly_status'] so the UI can poll it.
+    Can also be triggered manually via POST /api/screener/trigger-nightly.
+    """
+    from backend.data.nse_universe import get_universe
+    from backend.data.market_data import fetch_ohlcv
+    from backend.data.fundamentals import fetch_fundamentals_yfinance
+    from backend.data.news_feed import fetch_finnhub_news
+    from backend.engines.technical_engine import analyze_technical
+    from backend.engines.fundamental_engine import analyze_fundamental
+    from backend.engines.sentiment_engine import analyze_sentiment
+    from backend.engines.ensemble_scorer import calculate_composite, determine_market_regime
+    from backend.models.database import AsyncSessionLocal
+    from backend.models.schemas import AnalysisScore
+    import asyncio, json, time
+
+    symbols = get_universe(universe_name)
+    started = datetime.now(IST)
+    start_ts = time.time()
+
+    _cache["nightly_status"].update({
+        "status": "running",
+        "started_at": started.isoformat(),
+        "completed_at": None,
+        "universe": universe_name,
+        "total": len(symbols),
+        "saved": 0,
+        "skipped": 0,
+        "progress_pct": 0,
+        "duration_s": None,
+    })
+    logger.info(f"🌙 [Nightly] Pre-computation started: {len(symbols)} symbols ({universe_name})")
+
+    # Grab shared market context once
+    cache        = _cache
+    indices      = cache.get("indices") or {}
+    nifty_data   = indices.get("NIFTY50") or {}
+    nifty_change = nifty_data.get("change_pct", 0.0)
+    nifty_change_20d = nifty_data.get("change_pct_20d", 0.0)
+    vix_data     = cache.get("india_vix") or {}
+    vix          = vix_data.get("vix", 14.0)
+    fii_dii      = cache.get("fii_dii") or {}
+
+    today_regime = determine_market_regime(nifty_change, vix, nifty_change_20d)
+    logger.info(f"  Nightly: today's regime = {today_regime}")
+
+    saved   = 0
+    skipped = 0
+    loop    = asyncio.get_event_loop()
+    BATCH   = 8
+
+    async def _score_one(symbol: str):
+        nonlocal saved, skipped
+        try:
+            ohlcv_df     = await loop.run_in_executor(None, lambda: fetch_ohlcv(symbol, interval="1d", period="6mo"))
+            if ohlcv_df is None or ohlcv_df.empty:
+                skipped += 1
+                return
+
+            fundamentals = await loop.run_in_executor(None, lambda: fetch_fundamentals_yfinance(symbol))
+            news         = await loop.run_in_executor(None, lambda: fetch_finnhub_news(symbol))
+
+            tech_result  = analyze_technical(ohlcv_df)
+            fund_result  = analyze_fundamental(fundamentals)
+            sent_result  = analyze_sentiment(news, fii_dii)
+
+            final = calculate_composite(
+                tech_data=tech_result, fund_data=fund_result, sent_data=sent_result,
+                nifty_change=nifty_change, nifty_change_20d=nifty_change_20d, vix=vix,
+            )
+
+            targets = final.get("targets") or {}
+            record = AnalysisScore(
+                symbol=symbol,
+                technical_score=final.get("components", {}).get("technical"),
+                fundamental_score=final.get("components", {}).get("fundamental"),
+                sentiment_score=final.get("components", {}).get("sentiment"),
+                composite_score=final.get("composite_score"),
+                signal=final.get("signal"),
+                confidence=final.get("confidence", 0.8),
+                current_price=tech_result.get("close"),
+                target_low_5d=targets.get("conservative"),
+                target_base_5d=targets.get("base"),
+                target_high_5d=targets.get("aggressive"),
+                target_low_10d=targets.get("conservative"),
+                target_base_10d=targets.get("base"),
+                target_high_10d=targets.get("aggressive"),
+                stop_loss=final.get("stop_loss"),
+                active_signals=json.dumps(tech_result.get("signals", [])),
+                dominant_pattern=tech_result.get("trend"),
+                atr_14=tech_result.get("atr"),
+                regime=today_regime,
+            )
+            async with AsyncSessionLocal() as db:
+                db.add(record)
+                await db.commit()
+            saved += 1
+        except Exception as e:
+            logger.warning(f"  Nightly: skipping {symbol} — {e}")
+            skipped += 1
+
+    try:
+        for i in range(0, len(symbols), BATCH):
+            batch = symbols[i: i + BATCH]
+            await asyncio.gather(*[_score_one(s) for s in batch])
+            progress = round(min(100, ((i + BATCH) / len(symbols)) * 100))
+            _cache["nightly_status"]["saved"]        = saved
+            _cache["nightly_status"]["skipped"]      = skipped
+            _cache["nightly_status"]["progress_pct"] = progress
+            logger.info(f"  Nightly: {min(i + BATCH, len(symbols))}/{len(symbols)} done (saved={saved} skipped={skipped})")
+
+        duration = round(time.time() - start_ts, 1)
+        _cache["nightly_status"].update({
+            "status": "completed",
+            "completed_at": datetime.now(IST).isoformat(),
+            "saved": saved,
+            "skipped": skipped,
+            "progress_pct": 100,
+            "duration_s": duration,
+        })
+        _cache["last_updated"]["nightly_precompute"] = datetime.now(IST).isoformat()
+        logger.info(f"✅ Nightly pre-computation complete — {saved} saved, {skipped} skipped in {duration}s")
+
+    except Exception as e:
+        _cache["nightly_status"]["status"] = "failed"
+        logger.error(f"❌ Nightly pre-computation failed: {e}")
+
+
 # ── Outcome Tracking Job ──────────────────────────────────────────────────
 
 async def job_check_signal_outcomes():
@@ -482,6 +629,16 @@ def setup_scheduler():
         trigger=CronTrigger(day_of_week="mon-fri", hour=18, minute=30, timezone=IST),
         id="signal_outcomes",
         name="Signal Outcome Check",
+        replace_existing=True,
+    )
+
+    # Daily 4:00 PM IST (Mon–Fri): Nightly pre-computation (Nifty 200 full scan)
+    # Runs 45 min after market close (3:30 PM) so EOD prices are fully settled.
+    scheduler.add_job(
+        job_nightly_precompute,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=16, minute=0, timezone=IST),
+        id="nightly_precompute",
+        name="Nightly Pre-Compute (Nifty 200)",
         replace_existing=True,
     )
 
