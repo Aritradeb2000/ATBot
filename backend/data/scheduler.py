@@ -485,12 +485,14 @@ def setup_scheduler():
         replace_existing=True,
     )
 
-    # Daily 9:30 AM IST (Mon–Fri): Auto-screener — scans Nifty 50, saves to DB for meta-learner
+    # Daily 3:15 PM IST (Mon–Fri): Auto-screener — scans Nifty 50, saves to DB for meta-learner
+    # 3:15 PM chosen deliberately: captures full-day EOD close prices used by all technical indicators.
+    # Opening prices (9:30 AM) are noisy from gaps; closing price = final daily consensus.
     scheduler.add_job(
         job_daily_screener,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=30, timezone=IST),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=15, timezone=IST),
         id="daily_screener",
-        name="Daily Auto-Screener (Nifty 50)",
+        name="Daily Auto-Screener (Nifty 50) @ EOD Close",
         replace_existing=True,
     )
 
