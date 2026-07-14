@@ -69,6 +69,7 @@ export default function ScreenerPage() {
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [hasScanned, setHasScanned] = useState(false);
+  const [forceLive, setForceLive]   = useState(false);
   const [nightlyStatus, setNightlyStatus] = useState<{ status: string; completed_at: string | null; saved: number; duration_s: number | null } | null>(null);
 
   // Load watchlist from localStorage
@@ -104,6 +105,7 @@ export default function ScreenerPage() {
     const params: ScreenerParams = {
       universe: isCustom ? "custom" : universe,
       signal, min_score: minScore, min_rsi: minRsi, max_rsi: maxRsi, preset, sort_by: sortBy,
+      live: forceLive,
     };
     if (isCustom && watchlistSyms) params.symbols = watchlistSyms;
 
@@ -290,6 +292,22 @@ export default function ScreenerPage() {
               </>
             ) : "▶ Run Scan"}
           </button>
+          
+          {/* Live scan toggle */}
+          {universe !== "watchlist" && (
+            <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
+              <input 
+                type="checkbox" 
+                id="forceLive" 
+                checked={forceLive} 
+                onChange={(e) => setForceLive(e.target.checked)} 
+                style={{ accentColor: "#3b82f6", cursor: "pointer" }} 
+              />
+              <label htmlFor="forceLive" style={{ fontSize: 11, color: "#94a3b8", cursor: "pointer" }}>
+                Force Live Scan <span style={{ color: "#ef4444" }}>(Slow: 2–8 mins)</span>
+              </label>
+            </div>
+          )}
         </div>
 
         {/* ── Results ───────────────────────────────────────────────── */}

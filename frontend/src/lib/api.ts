@@ -126,6 +126,7 @@ export interface ScreenerParams {
   preset?: string;
   sort_by?: string;
   limit?: number;
+  live?: boolean;
 }
 
 export async function runScreener(params: ScreenerParams = {}): Promise<ScreenerResponse> {
