@@ -11,7 +11,7 @@ from backend.config import settings
 from backend.models.database import init_db
 from backend.data.scheduler import (
     setup_scheduler, job_refresh_index_data,
-    job_refresh_news, job_refresh_fii_dii
+    job_refresh_news, job_refresh_fii_dii, startup_catchup
 )
 from backend.engines.meta_learner import get_current_adaptive_weights
 from backend.engines.ensemble_scorer import set_adaptive_weights
@@ -58,6 +58,12 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️ Could not load adaptive weights: {e}")
 
     logger.info("✅ Cache warm — ready to serve!")
+
+    # 5. Catch-up missed jobs (outcome check, report, precompute) if server
+    #    was offline at their scheduled time. Runs in background so startup
+    #    is not blocked. Logs appear in console ~a few seconds later.
+    import asyncio
+    asyncio.create_task(startup_catchup())
     
     yield  # Application runs while yielded
     

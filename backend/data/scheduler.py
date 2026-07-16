@@ -547,6 +547,115 @@ async def job_check_signal_outcomes():
         logger.error(f"❌ Daily report generation failed: {e}")
 
 
+# ── Startup Catch-Up ──────────────────────────────────────────────────────────
+
+async def startup_catchup():
+    """
+    Called once on server startup (via FastAPI lifespan).
+    Checks whether today's scheduled jobs ran. If the server was offline at
+    the scheduled time, fires the missed jobs immediately so no data is lost.
+
+    Jobs covered:
+      3:15 PM  → job_daily_screener        (check: any AnalysisScore saved today?)
+      4:00 PM  → job_nightly_precompute    (check: nightly_status.completed_at today?)
+      6:30 PM  → job_check_signal_outcomes (check: last_updated['signal_outcomes'] today?)
+    """
+    import asyncio
+    from backend.models.database import AsyncSessionLocal
+    from backend.models.schemas import AnalysisScore
+    from sqlalchemy import select, func
+
+    now = datetime.now(IST)
+    today = now.date()
+    weekday = now.weekday()  # 0=Mon, 6=Sun
+
+    # Only catch-up on weekdays (markets closed Sat/Sun)
+    if weekday >= 5:
+        logger.info("🟡 [Catchup] Weekend — skipping startup catch-up")
+        return
+
+    logger.info(f"🔍 [Catchup] Checking for missed jobs on {today} (current time: {now.strftime('%H:%M')} IST)...")
+
+    async def _has_analysis_scores_today() -> bool:
+        """True if any AnalysisScore was saved today in IST."""
+        try:
+            cutoff_start = datetime(today.year, today.month, today.day, 0, 0, 0)
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(func.count(AnalysisScore.id))
+                    .where(AnalysisScore.timestamp >= cutoff_start)
+                )
+                count = result.scalar() or 0
+            return count > 0
+        except Exception as e:
+            logger.warning(f"[Catchup] DB check failed: {e}")
+            return False  # assume missed → safe to re-run
+
+    tasks_fired = []
+
+    # ── 3:15 PM: Daily Screener ──────────────────────────────────────────
+    screener_scheduled = now.replace(hour=15, minute=15, second=0, microsecond=0)
+    if now >= screener_scheduled:
+        has_scores = await _has_analysis_scores_today()
+        if not has_scores:
+            logger.warning("⚡ [Catchup] Daily screener missed — firing now")
+            asyncio.create_task(job_daily_screener())
+            tasks_fired.append("job_daily_screener")
+        else:
+            logger.info("✅ [Catchup] Daily screener already ran today")
+
+    # ── 4:00 PM: Nightly Pre-Compute ─────────────────────────────────────
+    precompute_scheduled = now.replace(hour=16, minute=0, second=0, microsecond=0)
+    if now >= precompute_scheduled:
+        last_precompute = _cache.get("last_updated", {}).get("nightly_precompute")
+        already_ran = False
+        if last_precompute:
+            try:
+                lp_dt = datetime.fromisoformat(last_precompute)
+                already_ran = lp_dt.date() == today
+            except Exception:
+                pass
+        # Also check nightly_status in cache (populated during this session)
+        if _cache["nightly_status"].get("status") == "completed":
+            completed_at = _cache["nightly_status"].get("completed_at")
+            if completed_at:
+                try:
+                    ca_dt = datetime.fromisoformat(completed_at)
+                    if ca_dt.date() == today:
+                        already_ran = True
+                except Exception:
+                    pass
+        if not already_ran:
+            logger.warning("⚡ [Catchup] Nightly pre-compute missed — firing now")
+            asyncio.create_task(job_nightly_precompute())
+            tasks_fired.append("job_nightly_precompute")
+        else:
+            logger.info("✅ [Catchup] Nightly pre-compute already ran today")
+
+    # ── 6:30 PM: Outcome Check + Report ──────────────────────────────────
+    outcomes_scheduled = now.replace(hour=18, minute=30, second=0, microsecond=0)
+    if now >= outcomes_scheduled:
+        last_outcomes = _cache.get("last_updated", {}).get("signal_outcomes")
+        already_ran = False
+        if last_outcomes:
+            try:
+                lo_dt = datetime.fromisoformat(last_outcomes)
+                already_ran = lo_dt.date() == today
+            except Exception:
+                pass
+        if not already_ran:
+            logger.warning("⚡ [Catchup] Outcome check + report missed — firing now")
+            asyncio.create_task(job_check_signal_outcomes())
+            tasks_fired.append("job_check_signal_outcomes")
+        else:
+            logger.info("✅ [Catchup] Outcome check already ran today")
+
+    if tasks_fired:
+        logger.info(f"🚀 [Catchup] Fired {len(tasks_fired)} missed job(s): {', '.join(tasks_fired)}")
+    else:
+        logger.info("✅ [Catchup] All scheduled jobs are up-to-date — nothing to catch up")
+
+
 # ── Scheduler Setup ───────────────────────────────────────────────────────
 
 def setup_scheduler():
