@@ -1,24 +1,28 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import useSWR from "swr";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import StockCard from "@/components/ui/StockCard";
 import SignalBadge from "@/components/ui/SignalBadge";
 import MorningBriefingPanel from "@/components/ui/MorningBriefingPanel";
-import { analyzeStock, getMarketOverview, type AnalysisResult, type MarketOverview } from "@/lib/api";
-
-import { useEffect } from "react";
+import { analyzeStock, getMarketOverview, type MarketOverview } from "@/lib/api";
 
 // Default fallback watchlist if local storage is empty
 const DEFAULT_WATCHLIST = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ITC.NS", "KOTAKBANK.NS"];
-const TOP_SIGNALS_SYMBOLS = ["TCS.NS", "RELIANCE.NS", "INFY.NS", "HDFCBANK.NS", "ITC.NS"];
 
-function useTopSignals(symbols: string[]) {
-  return useSWR<AnalysisResult[]>(
-    ["top-signals", symbols.join(",")],
-    () => Promise.all(symbols.map((s) => analyzeStock(s))),
-    { revalidateOnFocus: false, dedupingInterval: 300000 }
-  );
+// Types for the Top Buy Signals panel
+interface TopSignal {
+  symbol: string; ticker: string; score: number; signal: string;
+  confidence: number; regime: string; price: number | null;
+  stop_loss: number | null; target_base_5d: number | null;
+  components: { technical: number; fundamental: number; sentiment: number };
+  active_signals: string[];
+  computed_at: string | null;
+}
+interface TopSignalsResponse {
+  count: number; universe: string; data_source: string;
+  last_computed: string | null; results: TopSignal[];
 }
 
 function WatchlistCard({ symbol, index, onRemove }: { symbol: string, index: number, onRemove: (s: string) => void }) {
@@ -175,12 +179,15 @@ export default function DashboardPage() {
   };
 
   const { data: marketData } = useSWR<MarketOverview>("market-overview", getMarketOverview, { refreshInterval: 60000 });
-  const { data: topData } = useTopSignals(TOP_SIGNALS_SYMBOLS);
+  const { data: topSignalsData } = useSWR<TopSignalsResponse>(
+    "top-signals-panel",
+    () => fetch("http://localhost:8000/api/screener/top-signals?limit=5").then(r => r.json()),
+    { revalidateOnFocus: false, refreshInterval: 300000 }
+  );
 
-  const topBuys = topData
-    ?.filter((r) => r.analysis.signal === "BUY" || r.analysis.signal === "STRONG BUY")
-    .sort((a, b) => b.analysis.composite_score - a.analysis.composite_score)
-    .slice(0, 5);
+  const topSignals = topSignalsData?.results ?? [];
+  const regimeColor = (r: string) => r === "BULL" ? "#22c55e" : r === "BEAR" ? "#ef4444" : "#f59e0b";
+  const scoreColor = (s: number) => s >= 75 ? "#22c55e" : s >= 60 ? "#f59e0b" : "#ef4444";
 
   return (
     <div style={{ maxWidth: 1400 }}>
@@ -277,35 +284,96 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Right: Top Buy Signals */}
+        {/* Right: Top Buy Signals (from full Nifty 200) */}
         <div>
-          <h2 style={{ fontSize: 13, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 14 }}>TOP BUY SIGNALS</h2>
-          <div className="space-y-3">
-            {!topBuys ? (
-              [...Array(5)].map((_, i) => <div key={i} className="shimmer" style={{ height: 64, borderRadius: 12 }} />)
-            ) : topBuys.length === 0 ? (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <h2 style={{ fontSize: 13, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", margin: 0 }}>TOP BUY SIGNALS</h2>
+            {topSignalsData?.last_computed && (
+              <span style={{ fontSize: 9, color: "#334155" }}>
+                {new Date(topSignalsData.last_computed).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })} IST
+              </span>
+            )}
+          </div>
+
+          {/* Source badge */}
+          {topSignalsData && (
+            <div style={{ marginBottom: 10, fontSize: 10, color: topSignalsData.data_source === "precomputed" ? "#22c55e" : "#f59e0b",
+              display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ fontWeight: 700 }}>
+                {topSignalsData.data_source === "precomputed" ? "⚡ Nifty 200" : "🔴 Live"}
+              </span>
+              <span style={{ color: "#334155" }}>· {topSignalsData.count} signals found</span>
+            </div>
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {!topSignalsData ? (
+              [...Array(5)].map((_, i) => <div key={i} className="shimmer" style={{ height: 80, borderRadius: 12 }} />)
+            ) : topSignals.length === 0 ? (
               <div className="glass-card p-4" style={{ textAlign: "center", color: "#475569", fontSize: 13 }}>
+                <div style={{ fontSize: 24, marginBottom: 6 }}>🟡</div>
                 No strong buy signals right now
+                <div style={{ fontSize: 11, color: "#334155", marginTop: 4 }}>Next nightly scan at 4:00 PM IST</div>
               </div>
             ) : (
-              topBuys.map((r, i) => (
-                <motion.a
+              topSignals.map((r, i) => (
+                <motion.div
                   key={r.symbol}
-                  href={`/stock/${r.symbol}`}
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.07 }}
-                  className="glass-card block p-3 cursor-pointer"
-                  whileHover={{ x: -2 }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>{r.symbol.replace(".NS", "")}</div>
-                      <div style={{ fontSize: 11, color: "#475569", marginTop: 1 }}>Score: {Math.round(r.analysis.composite_score)}</div>
+                  <Link href={`/stock/${r.symbol}`} style={{ textDecoration: "none" }}>
+                    <div className="glass-card p-3 cursor-pointer"
+                      style={{ transition: "border-color 0.15s" }}
+                      onMouseEnter={(e) => e.currentTarget.style.borderColor = "rgba(59,130,246,0.4)"}
+                      onMouseLeave={(e) => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}>
+                      {/* Row 1: ticker + signal */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                        <div>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: "#f1f5f9" }}>{r.ticker}</span>
+                          <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, padding: "2px 5px", borderRadius: 4,
+                            background: regimeColor(r.regime) + "18", color: regimeColor(r.regime) }}>{r.regime}</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <span style={{ fontSize: 16, fontWeight: 800, color: scoreColor(r.score) }}>{r.score}</span>
+                          <SignalBadge signal={r.signal} size="sm" />
+                        </div>
+                      </div>
+                      {/* Row 2: price + target */}
+                      {r.price && (
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#64748b", marginBottom: 5 }}>
+                          <span>₹{r.price.toLocaleString("en-IN", { maximumFractionDigits: 1 })}</span>
+                          {r.target_base_5d && (
+                            <span style={{ color: "#22c55e" }}>→ ₹{r.target_base_5d.toLocaleString("en-IN", { maximumFractionDigits: 1 })} (5d)</span>
+                          )}
+                        </div>
+                      )}
+                      {/* Row 3: T/F/S mini bars */}
+                      <div style={{ display: "flex", gap: 4 }}>
+                        {(["T", "F", "S"] as const).map((k, j) => {
+                          const vals: Record<string, number> = { T: r.components.technical, F: r.components.fundamental, S: r.components.sentiment };
+                          const cols = ["#3b82f6", "#a855f7", "#10b981"];
+                          return (
+                            <div key={k} style={{ flex: 1 }}>
+                              <div style={{ fontSize: 9, color: "#475569", marginBottom: 2 }}>{k} {vals[k]}</div>
+                              <div style={{ height: 3, borderRadius: 99, background: "rgba(255,255,255,0.06)" }}>
+                                <div style={{ height: "100%", width: `${vals[k]}%`, background: cols[j], borderRadius: 99 }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Row 4: top signal reason */}
+                      {r.active_signals[0] && (
+                        <div style={{ marginTop: 5, fontSize: 9, color: "#334155" }}>
+                          ✔ {r.active_signals[0]}
+                          {r.active_signals[1] && <> · {r.active_signals[1]}</>}
+                        </div>
+                      )}
                     </div>
-                    <SignalBadge signal={r.analysis.signal} size="sm" />
-                  </div>
-                </motion.a>
+                  </Link>
+                </motion.div>
               ))
             )}
           </div>

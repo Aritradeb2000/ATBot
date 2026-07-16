@@ -321,6 +321,97 @@ async def run_screener(
         "results":        filtered,
     }
 
+# ── GET /api/screener/top-signals ─────────────────────────────────────────────
+
+@router.get("/screener/top-signals")
+async def get_top_signals(
+    limit:    int  = Query(default=5, ge=1, le=20),
+    signal:   str  = Query(default="BUY,STRONG BUY", description="Comma-separated signals to include"),
+    universe: str  = Query(default="nifty200", description="nifty50 | nifty200"),
+):
+    """
+    Returns top N stocks by composite score from the nightly pre-computed DB.
+    Designed for the Dashboard 'Top Buy Signals Today' right panel.
+    """
+    import json as _json
+    from backend.data.nse_universe import get_universe
+    from backend.models.database import AsyncSessionLocal
+    from backend.models.schemas import AnalysisScore
+    from sqlalchemy import select, func as sqlfunc
+    from datetime import datetime, timedelta
+
+    allowed_signals = [s.strip() for s in signal.split(",") if s.strip()]
+    sym_list = get_universe(universe)
+    cutoff = datetime.utcnow() - timedelta(hours=PRECOMPUTE_MAX_AGE_H)
+
+    try:
+        async with AsyncSessionLocal() as db:
+            subq = (
+                select(
+                    AnalysisScore.symbol,
+                    sqlfunc.max(AnalysisScore.timestamp).label("max_ts")
+                )
+                .where(
+                    AnalysisScore.symbol.in_(sym_list),
+                    AnalysisScore.timestamp >= cutoff,
+                    AnalysisScore.signal.in_(allowed_signals),
+                )
+                .group_by(AnalysisScore.symbol)
+                .subquery()
+            )
+            result = await db.execute(
+                select(AnalysisScore)
+                .join(
+                    subq,
+                    (AnalysisScore.symbol == subq.c.symbol) &
+                    (AnalysisScore.timestamp == subq.c.max_ts)
+                )
+                .order_by(AnalysisScore.composite_score.desc())
+                .limit(limit)
+            )
+            rows = result.scalars().all()
+
+        signals_out = []
+        last_ts = None
+        for r in rows:
+            if last_ts is None or (r.timestamp and r.timestamp > last_ts):
+                last_ts = r.timestamp
+            active_sigs = []
+            try:
+                active_sigs = _json.loads(r.active_signals or "[]")
+            except Exception:
+                pass
+            conf = r.confidence or 0
+            signals_out.append({
+                "symbol":         r.symbol,
+                "ticker":         r.symbol.replace(".NS", "").replace(".BO", ""),
+                "score":          round(r.composite_score or 0, 1),
+                "signal":         r.signal or "HOLD",
+                "confidence":     round(conf * 100) if conf <= 1 else round(conf),
+                "regime":         r.regime or "SIDEWAYS",
+                "price":          r.current_price,
+                "stop_loss":      r.stop_loss,
+                "target_base_5d": r.target_base_5d,
+                "components": {
+                    "technical":   round(r.technical_score or 0),
+                    "fundamental": round(r.fundamental_score or 0),
+                    "sentiment":   round(r.sentiment_score or 0),
+                },
+                "active_signals": active_sigs[:3],
+                "computed_at":    r.timestamp.isoformat() if r.timestamp else None,
+            })
+
+        return {
+            "count":         len(signals_out),
+            "universe":      universe,
+            "data_source":   "precomputed" if signals_out else "empty",
+            "last_computed": last_ts.isoformat() if last_ts else None,
+            "results":       signals_out,
+        }
+    except Exception as e:
+        logger.error(f"top-signals endpoint failed: {e}")
+        return {"count": 0, "universe": universe, "data_source": "error", "last_computed": None, "results": []}
+
 
 # ── GET /api/screener/status ──────────────────────────────────────────────────
 
