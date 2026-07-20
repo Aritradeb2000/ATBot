@@ -1,21 +1,19 @@
 """
 ATBot — Signal Outcome Tracker
 Checks price at Day 5 and Day 10 after a signal was issued,
-then records WIN / LOSS / BREAKEVEN / OPEN in the signal_outcomes table.
+then records WIN / PARTIAL / LOSS / BREAKEVEN / OPEN.
 
-Logic:
-  BUY / STRONG BUY:
-    WIN        → price >= target_conservative (hit at least the low target)
-    LOSS       → price <= stop_loss
-    BREAKEVEN  → |pnl%| < 0.5%
-    OPEN       → neither target nor SL hit yet
+Outcome definitions:
+  WIN        → price hit ≥ 80% of conservative target gap, OR solid gain ≥ 1.5%
+  PARTIAL    → moved in the right direction but small (0.5–1.5%), didn't reach target
+  BREAKEVEN  → |pnl%| < 0.5% — stock barely moved, not scored
+  LOSS       → price went wrong direction, or stop loss was hit
+  OPEN       → HOLD signal or insufficient data
 
-  SELL / STRONG SELL:
-    WIN        → price <= stop_loss (bearish: price fell as expected)
-    LOSS       → price >= target_conservative (rose against the signal)
-    BREAKEVEN  → |pnl%| < 0.5%
-
-  HOLD: always recorded as OPEN (no directional bias to evaluate)
+Win rate calculation in learn.py:
+  WIN × 1.0 + PARTIAL × 0.5
+  ─────────────────────────────
+  WIN + PARTIAL + LOSS (BREAKEVEN excluded from denominator)
 """
 
 import asyncio
@@ -36,8 +34,11 @@ logger = logging.getLogger(__name__)
 # Trading days to check
 CHECK_DAYS = [5, 10]
 
-# Tolerance for BREAKEVEN (within ±0.5%)
-BREAKEVEN_THRESHOLD = 0.5
+# Outcome thresholds
+BREAKEVEN_THRESHOLD  = 0.5   # |P&L| < 0.5% → BREAKEVEN (market noise, not scored)
+SOLID_WIN_THRESHOLD  = 1.5   # P&L ≥ 1.5% → WIN even without hitting target
+TARGET_PROGRESS_WIN  = 0.80  # Reached ≥ 80% of target gap → WIN (NEAR_TARGET)
+PARTIAL_THRESHOLD    = 0.0   # P&L > 0 (above BREAKEVEN) → PARTIAL
 
 
 def _get_trading_day_offset(from_date: datetime, n_trading_days: int) -> date:
@@ -78,40 +79,73 @@ def _classify_outcome(
 ) -> tuple[str, str]:
     """
     Returns (outcome, outcome_detail).
-    outcome: WIN / LOSS / BREAKEVEN / OPEN
+    outcome: WIN / PARTIAL / LOSS / BREAKEVEN / OPEN
+
+    WIN     — hit ≥ 80% of target gap, or solid gain ≥ 1.5%
+    PARTIAL — right direction but small move (0.5–1.5%, didn't reach target)
+    BREAKEVEN — within ±0.5%, market noise
+    LOSS    — wrong direction, or stop loss hit
     """
     if entry_price is None or entry_price == 0:
         return "OPEN", "NO_ENTRY_PRICE"
 
     pnl_pct = ((price_at_check - entry_price) / entry_price) * 100
-    signal_upper = signal.upper().replace(" ", "_")
+    signal_upper = signal.upper().strip()
 
-    if signal_upper in ("HOLD", "HOLD"):
+    if signal_upper == "HOLD":
         return "OPEN", "HOLD_SIGNAL"
 
-    is_buy_signal  = signal_upper in ("STRONG_BUY", "BUY", "STRONG BUY")
-    is_sell_signal = signal_upper in ("STRONG_SELL", "SELL", "STRONG SELL")
+    is_buy_signal  = signal_upper in ("STRONG BUY", "BUY", "STRONG_BUY")
+    is_sell_signal = signal_upper in ("STRONG SELL", "SELL", "STRONG_SELL")
 
+    # ── BREAKEVEN: market barely moved — not scored in either direction ──────
     if abs(pnl_pct) < BREAKEVEN_THRESHOLD:
         return "BREAKEVEN", "WITHIN_TOLERANCE"
 
     if is_buy_signal:
-        if target_conservative and price_at_check >= target_conservative:
-            return "WIN", "TARGET_HIT"
-        elif stop_loss and price_at_check <= stop_loss:
+        # SL hit first — full LOSS regardless of target
+        if stop_loss and price_at_check <= stop_loss:
             return "LOSS", "SL_HIT"
-        elif pnl_pct > 0:
-            return "WIN", "PARTIAL_GAIN"
+
+        if pnl_pct > 0:
+            # Check target progress
+            if target_conservative and target_conservative > entry_price:
+                target_gap   = target_conservative - entry_price
+                actual_gain  = price_at_check - entry_price
+                progress_pct = actual_gain / target_gap  # 0–1+ ratio
+
+                if progress_pct >= 1.0:
+                    return "WIN", "TARGET_HIT"     # hit or exceeded target
+                elif progress_pct >= TARGET_PROGRESS_WIN:
+                    return "WIN", "NEAR_TARGET"    # ≥ 80% of the way — counts as WIN
+
+            # No target data or below 80% progress:
+            if pnl_pct >= SOLID_WIN_THRESHOLD:
+                return "WIN", "SOLID_GAIN"         # strong move even without target
+            else:
+                return "PARTIAL", "PARTIAL_GAIN"  # right direction but weak
         else:
             return "LOSS", "PARTIAL_LOSS"
 
     if is_sell_signal:
+        # For SELL: winning means price fell
         if stop_loss and price_at_check <= stop_loss:
-            return "WIN", "PRICE_FELL"
+            return "WIN", "PRICE_FELL"             # fell past SL = full win for short
         elif target_conservative and price_at_check >= target_conservative:
-            return "LOSS", "PRICE_ROSE"
-        elif pnl_pct < 0:
-            return "WIN", "PARTIAL_FALL"
+            return "LOSS", "PRICE_ROSE"            # rose to our entry target = loss
+
+        if pnl_pct < 0:  # price dropped = win for sell signal
+            abs_fall = abs(pnl_pct)
+            if target_conservative and target_conservative < entry_price:
+                target_gap   = entry_price - target_conservative
+                actual_fall  = entry_price - price_at_check
+                progress_pct = actual_fall / target_gap
+                if progress_pct >= TARGET_PROGRESS_WIN:
+                    return "WIN", "NEAR_TARGET"
+            if abs_fall >= SOLID_WIN_THRESHOLD:
+                return "WIN", "SOLID_FALL"
+            else:
+                return "PARTIAL", "PARTIAL_FALL"
         else:
             return "LOSS", "PARTIAL_RISE"
 

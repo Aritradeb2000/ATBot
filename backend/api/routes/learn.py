@@ -32,12 +32,41 @@ router = APIRouter(tags=["Learn"])
 # ── Helper ────────────────────────────────────────────────────────────────────
 
 def _win_rate(outcomes: list[dict]) -> float:
-    """Win rate % from a list of outcome dicts."""
-    resolved = [o for o in outcomes if o["outcome"] in ("WIN", "LOSS", "BREAKEVEN")]
+    """
+    Weighted win rate:
+      WIN     = 1.0 point
+      PARTIAL = 0.5 point  (right direction, not enough)
+      LOSS    = 0   points
+      BREAKEVEN excluded from denominator (market noise, not scored)
+    """
+    decisive = [o for o in outcomes if o["outcome"] in ("WIN", "PARTIAL", "LOSS")]
+    if not decisive:
+        return 0.0
+    score = sum(
+        1.0 if o["outcome"] == "WIN" else
+        0.5 if o["outcome"] == "PARTIAL" else
+        0.0
+        for o in decisive
+    )
+    return round((score / len(decisive)) * 100, 1)
+
+
+def _strict_win_rate(outcomes: list[dict]) -> float:
+    """Strict: WIN-only / (WIN + PARTIAL + LOSS). No weighting."""
+    decisive = [o for o in outcomes if o["outcome"] in ("WIN", "PARTIAL", "LOSS")]
+    if not decisive:
+        return 0.0
+    wins = sum(1 for o in decisive if o["outcome"] == "WIN")
+    return round((wins / len(decisive)) * 100, 1)
+
+
+def _directional_accuracy(outcomes: list[dict]) -> float:
+    """What % of signals went in the right direction (WIN + PARTIAL + BREAKEVEN)."""
+    resolved = [o for o in outcomes if o["outcome"] in ("WIN", "PARTIAL", "LOSS", "BREAKEVEN")]
     if not resolved:
         return 0.0
-    wins = sum(1 for o in resolved if o["outcome"] == "WIN")
-    return round((wins / len(resolved)) * 100, 1)
+    correct = sum(1 for o in resolved if o["outcome"] in ("WIN", "PARTIAL", "BREAKEVEN"))
+    return round((correct / len(resolved)) * 100, 1)
 
 
 # ── GET /api/learn/stats ─────────────────────────────────────────────────────
@@ -93,25 +122,35 @@ async def get_learn_stats(
         for r in rows
     ]
 
-    resolved = [d for d in all_dicts if d["outcome"] in ("WIN", "LOSS", "BREAKEVEN")]
-    wins     = [d for d in resolved if d["outcome"] == "WIN"]
-    losses   = [d for d in resolved if d["outcome"] == "LOSS"]
+    resolved   = [d for d in all_dicts if d["outcome"] in ("WIN", "PARTIAL", "LOSS", "BREAKEVEN")]
+    decisive   = [d for d in resolved  if d["outcome"] in ("WIN", "PARTIAL", "LOSS")]  # excludes BREAKEVEN
+    wins       = [d for d in decisive  if d["outcome"] == "WIN"]
+    partials   = [d for d in decisive  if d["outcome"] == "PARTIAL"]
+    losses     = [d for d in decisive  if d["outcome"] == "LOSS"]
+    breakevens = [d for d in resolved  if d["outcome"] == "BREAKEVEN"]
 
     # ── By signal type ────────────────────────────────────────────────────────
-    by_signal: dict[str, dict] = defaultdict(lambda: {"total": 0, "wins": 0, "losses": 0, "win_rate": 0.0, "avg_pnl": 0.0})
+    by_signal: dict[str, dict] = defaultdict(lambda: {
+        "total": 0, "wins": 0, "partials": 0, "losses": 0, "breakevens": 0,
+        "win_rate": 0.0, "avg_pnl": 0.0
+    })
     for d in resolved:
         sig = d["signal"] or "UNKNOWN"
         by_signal[sig]["total"] += 1
         if d["outcome"] == "WIN":
             by_signal[sig]["wins"] += 1
+        elif d["outcome"] == "PARTIAL":
+            by_signal[sig]["partials"] += 1
         elif d["outcome"] == "LOSS":
             by_signal[sig]["losses"] += 1
+        elif d["outcome"] == "BREAKEVEN":
+            by_signal[sig]["breakevens"] += 1
 
     for sig, stats in by_signal.items():
-        if stats["total"] > 0:
-            stats["win_rate"] = round((stats["wins"] / stats["total"]) * 100, 1)
-        sig_resolved = [d["pnl_percent"] for d in resolved if d["signal"] == sig]
-        stats["avg_pnl"] = round(sum(sig_resolved) / len(sig_resolved), 2) if sig_resolved else 0.0
+        sig_outcomes = [d for d in resolved if d["signal"] == sig]
+        stats["win_rate"] = _win_rate(sig_outcomes)
+        sig_decisive = [d["pnl_percent"] for d in sig_outcomes if d["outcome"] in ("WIN", "PARTIAL", "LOSS")]
+        stats["avg_pnl"] = round(sum(sig_decisive) / len(sig_decisive), 2) if sig_decisive else 0.0
 
     # ── Monthly trend ─────────────────────────────────────────────────────────
     monthly: dict[str, list] = defaultdict(list)
@@ -165,19 +204,31 @@ async def get_learn_stats(
     remaining = [s for s in stock_stats if s["symbol"] not in top_symbols]
     worst_stocks = sorted(remaining, key=lambda x: (x["win_rate"], x["avg_pnl"]))[:5]
 
+    # Weighted win rate: WIN=1.0, PARTIAL=0.5, LOSS=0, BREAKEVEN=excluded
+    decisive_count = len(decisive)
+    weighted_wins  = len(wins) + 0.5 * len(partials)
+    weighted_rate  = round((weighted_wins / decisive_count) * 100, 1) if decisive_count else 0.0
+
     return {
-        "total_signals":   len(all_dicts),
-        "total_resolved":  len(resolved),
-        "overall_win_rate": round((len(wins) / len(resolved)) * 100, 1) if resolved else 0.0,
-        "avg_pnl_pct":     round(sum(d["pnl_percent"] for d in resolved) / len(resolved), 2) if resolved else 0.0,
-        "avg_pnl_wins":    round(sum(d["pnl_percent"] for d in wins) / len(wins), 2) if wins else 0.0,
-        "avg_loss_pct":    round(sum(d["pnl_percent"] for d in losses) / len(losses), 2) if losses else 0.0,
-        "by_signal":       dict(by_signal),
-        "monthly_trend":   monthly_trend,
-        "by_component":    by_component,
-        "top_stocks":      top_stocks,
-        "worst_stocks":    worst_stocks,
-        "has_data":        True,
+        "total_signals":       len(all_dicts),
+        "total_resolved":      len(resolved),
+        "total_decisive":      decisive_count,
+        "overall_win_rate":    weighted_rate,         # weighted: WIN + 0.5×PARTIAL
+        "strict_win_rate":     _strict_win_rate(resolved),  # WIN only
+        "directional_accuracy": _directional_accuracy(resolved),  # right direction incl. BREAKEVEN
+        "win_count":           len(wins),
+        "partial_count":       len(partials),
+        "loss_count":          len(losses),
+        "breakeven_count":     len(breakevens),
+        "avg_pnl_pct":         round(sum(d["pnl_percent"] for d in decisive) / decisive_count, 2) if decisive_count else 0.0,
+        "avg_pnl_wins":        round(sum(d["pnl_percent"] for d in wins) / len(wins), 2) if wins else 0.0,
+        "avg_loss_pct":        round(sum(d["pnl_percent"] for d in losses) / len(losses), 2) if losses else 0.0,
+        "by_signal":           dict(by_signal),
+        "monthly_trend":       monthly_trend,
+        "by_component":        by_component,
+        "top_stocks":          top_stocks,
+        "worst_stocks":        worst_stocks,
+        "has_data":            True,
     }
 
 
@@ -193,7 +244,7 @@ async def get_recent_outcomes(
     result = await db.execute(
         select(SignalOutcome)
         .where(
-            SignalOutcome.outcome.in_(["WIN", "LOSS", "BREAKEVEN"]),
+            SignalOutcome.outcome.in_(["WIN", "PARTIAL", "LOSS", "BREAKEVEN"]),
             SignalOutcome.check_day == check_day,
         )
         .order_by(SignalOutcome.entry_date.desc())
