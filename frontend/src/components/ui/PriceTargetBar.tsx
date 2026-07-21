@@ -14,21 +14,39 @@ export default function PriceTargetBar({ currentPrice, stopLoss, conservative, b
   const max = aggressive * 1.005;
   const range = max - min;
 
-  const pct = (val: number) => `${(((val - min) / range) * 100).toFixed(1)}%`;
+  const pctNum = (val: number) => ((val - min) / range) * 100;
+  const pct    = (val: number) => `${pctNum(val).toFixed(1)}%`;
 
-  const markers = [
-    { val: stopLoss,     label: "SL",          color: "#ef4444", textColor: "#f87171" },
-    { val: currentPrice, label: "CMP",          color: "#60a5fa", textColor: "#93c5fd" },
-    { val: conservative, label: "T1",           color: "#86efac", textColor: "#86efac" },
-    { val: base,         label: "T2",           color: "#4ade80", textColor: "#4ade80" },
-    { val: aggressive,   label: "T3",           color: "#16a34a", textColor: "#34d399" },
+  // Assign markers in bar order
+  const rawMarkers = [
+    { val: stopLoss,     label: "SL",  color: "#ef4444", textColor: "#f87171" },
+    { val: currentPrice, label: "CMP", color: "#60a5fa", textColor: "#93c5fd" },
+    { val: conservative, label: "T1",  color: "#86efac", textColor: "#86efac" },
+    { val: base,         label: "T2",  color: "#4ade80", textColor: "#4ade80" },
+    { val: aggressive,   label: "T3",  color: "#16a34a", textColor: "#34d399" },
   ];
 
+  // Auto-stagger: if two adjacent markers are within 12% of bar width, push second to row 1
+  const MIN_GAP = 12; // percent
+  const markers = rawMarkers.map((m, i) => {
+    if (i === 0) return { ...m, row: 0 };
+    const prev = rawMarkers[i - 1];
+    const gap = Math.abs(pctNum(m.val) - pctNum(prev.val));
+    // If gap is tight, alternate rows with the previous marker
+    const prevRow = i > 0 ? (rawMarkers[i - 1] as any)._row ?? 0 : 0;
+    const row = gap < MIN_GAP ? (prevRow === 0 ? 1 : 0) : 0;
+    (m as any)._row = row;
+    return { ...m, row };
+  });
+
+  const ROW_HEIGHT = 22; // px per row
+  const CONTAINER_H = 52;
+
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {/* Bar */}
       <div className="relative h-3 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
-        {/* Filled region (SL → Aggressive) */}
+        {/* Filled region (CMP → T3) */}
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${(((aggressive - currentPrice) / range) * 100).toFixed(1)}%` }}
@@ -41,7 +59,7 @@ export default function PriceTargetBar({ currentPrice, stopLoss, conservative, b
             borderRadius: "0 99px 99px 0",
           }}
         />
-        {/* Markers */}
+        {/* Dot markers */}
         {markers.map((m) => (
           <div
             key={m.label}
@@ -62,22 +80,31 @@ export default function PriceTargetBar({ currentPrice, stopLoss, conservative, b
         ))}
       </div>
 
-      {/* Labels below */}
-      <div className="relative" style={{ height: 40 }}>
-        {markers.map((m) => (
-          <div
-            key={m.label}
-            style={{
-              position: "absolute",
-              left: pct(m.val),
-              transform: "translateX(-50%)",
-              textAlign: "center",
-            }}
-          >
-            <div style={{ fontSize: 10, fontWeight: 700, color: m.textColor }}>{m.label}</div>
-            <div style={{ fontSize: 10, color: "#64748b" }}>₹{m.val.toLocaleString("en-IN")}</div>
-          </div>
-        ))}
+      {/* Labels — staggered into two rows */}
+      <div style={{ position: "relative", height: CONTAINER_H }}>
+        {markers.map((m) => {
+          const topOffset = m.row * ROW_HEIGHT;
+          return (
+            <div
+              key={m.label}
+              style={{
+                position: "absolute",
+                left: pct(m.val),
+                top: topOffset,
+                transform: "translateX(-50%)",
+                textAlign: "center",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <div style={{ fontSize: 10, fontWeight: 700, color: m.textColor, lineHeight: 1.2 }}>
+                {m.label}
+              </div>
+              <div style={{ fontSize: 9, color: "#64748b", lineHeight: 1.2 }}>
+                ₹{m.val.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
