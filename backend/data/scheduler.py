@@ -515,17 +515,18 @@ async def job_nightly_precompute(universe_name: str = "nifty200"):
 
 async def job_check_signal_outcomes():
     """
-    Daily at 6:30 PM IST: check price at Day 5 & Day 10 vs each signal's
+    Daily at 6:30 PM IST: check price at Day 1, 2, 5 & 10 vs each signal's
     stop loss and target. Writes results into signal_outcomes table.
     After recording outcomes, also triggers the meta-learner.
     """
-    logger.info("📊 [Scheduler] Checking signal outcomes (D5/D10)...")
+    import traceback
+    logger.info("📊 [Scheduler] Checking signal outcomes (D1/D2/D5/D10)...")
     try:
         count = await run_outcome_check()
         logger.info(f"✅ Signal outcomes: {count} new records written")
         _cache["last_updated"]["signal_outcomes"] = datetime.now(IST).isoformat()
     except Exception as e:
-        logger.error(f"❌ Outcome check failed: {e}")
+        logger.error(f"❌ Outcome check failed: {e}\n{traceback.format_exc()}")  # full traceback
 
     # After outcomes are updated, re-run meta-learner to refresh adaptive weights
     try:
