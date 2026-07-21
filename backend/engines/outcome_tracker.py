@@ -225,11 +225,23 @@ async def run_outcome_check():
                 pnl_amount  = round(price - entry_price, 2) if entry_price else None
                 pnl_percent = round(((price - entry_price) / entry_price) * 100, 2) if entry_price else None
 
+                # Select the correct target based on the check horizon
+                # D1/D2/D5 → 5-day targets (tighter, achievable in a week)
+                # D10       → 10-day targets (wider, two-week hold)
+                if check_day <= 5:
+                    t_conservative = score.target_low_5d  or score.target_base_5d or 0.0
+                    t_base         = score.target_base_5d or score.target_low_5d  or 0.0
+                    t_aggressive   = score.target_high_5d or score.target_base_5d or 0.0
+                else:  # D10
+                    t_conservative = score.target_low_10d  or score.target_low_5d  or 0.0
+                    t_base         = score.target_base_10d or score.target_base_5d or 0.0
+                    t_aggressive   = score.target_high_10d or score.target_high_5d or 0.0
+
                 outcome, detail = _classify_outcome(
                     signal             = score.signal or "HOLD",
                     entry_price        = entry_price,
                     stop_loss          = score.stop_loss or 0.0,
-                    target_conservative= score.target_low_5d or score.target_base_5d or 0.0,
+                    target_conservative= t_conservative,
                     price_at_check     = price,
                 )
 
@@ -245,9 +257,9 @@ async def run_outcome_check():
                     entry_date          = score.timestamp,
                     entry_price         = entry_price,
                     stop_loss           = score.stop_loss,
-                    target_conservative = score.target_low_5d,
-                    target_base         = score.target_base_5d,
-                    target_aggressive   = score.target_high_5d,
+                    target_conservative = t_conservative,
+                    target_base         = t_base,
+                    target_aggressive   = t_aggressive,
                     check_day           = check_day,
                     check_date          = datetime.now(IST),
                     price_at_check      = price,

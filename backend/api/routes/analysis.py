@@ -74,7 +74,9 @@ async def get_full_analysis(symbol: str, capital: Optional[float] = None, db: As
 
     # 4. Save to Database
     try:
-        targets = final_result.get("targets") or {}
+        targets    = final_result.get("targets") or {}          # 5d (default)
+        targets_5d = final_result.get("targets_5d") or targets
+        targets_10d= final_result.get("targets_10d") or targets
         score_record = AnalysisScore(
             symbol=symbol,
             technical_score=final_result.get("components", {}).get("technical"),
@@ -84,12 +86,12 @@ async def get_full_analysis(symbol: str, capital: Optional[float] = None, db: As
             signal=final_result.get("signal"),
             confidence=final_result.get("confidence", 0.8),
             current_price=tech_result.get("close"),
-            target_low_5d=targets.get("conservative"),
-            target_base_5d=targets.get("base"),
-            target_high_5d=targets.get("aggressive"),
-            target_low_10d=targets.get("conservative"),
-            target_base_10d=targets.get("base"),
-            target_high_10d=targets.get("aggressive"),
+            target_low_5d=targets_5d.get("conservative"),
+            target_base_5d=targets_5d.get("base"),
+            target_high_5d=targets_5d.get("aggressive"),
+            target_low_10d=targets_10d.get("conservative"),
+            target_base_10d=targets_10d.get("base"),
+            target_high_10d=targets_10d.get("aggressive"),
             stop_loss=final_result.get("stop_loss"),
             active_signals=json.dumps(tech_result.get("signals", [])),
             dominant_pattern=tech_result.get("trend"),

@@ -75,6 +75,7 @@ export default function StockDetailPage({ params }: Props) {
   );
 
   const [activeTab, setActiveTab] = useState<"signals" | "fundamental" | "sentiment">("signals");
+  const [targetHorizon, setTargetHorizon] = useState<"5d" | "10d">("5d");
 
   if (isLoading) {
     return (
@@ -315,36 +316,58 @@ export default function StockDetailPage({ params }: Props) {
 
         {/* Price Targets + Position Sizing */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card p-6">
-          <h3 style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 20 }}>PRICE TARGETS</h3>
+          {/* Header + 5D/10D toggle */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <h3 style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", margin: 0 }}>PRICE TARGETS</h3>
+            <div style={{ display: "flex", gap: 4 }}>
+              {(["5d", "10d"] as const).map(h => (
+                <button key={h} onClick={() => setTargetHorizon(h)} style={{
+                  padding: "4px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                  background: targetHorizon === h ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.04)",
+                  border: targetHorizon === h ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.08)",
+                  color: targetHorizon === h ? "#60a5fa" : "#475569",
+                }}>
+                  {h === "5d" ? "5D Swing" : "10D Positional"}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          {analysis.targets && analysis.stop_loss && current_price ? (
-            <>
-              <PriceTargetBar
-                currentPrice={current_price}
-                stopLoss={analysis.stop_loss}
-                conservative={analysis.targets.conservative}
-                base={analysis.targets.base}
-                aggressive={analysis.targets.aggressive}
-              />
+          {analysis.targets && analysis.stop_loss && current_price ? (() => {
+            // Pick targets based on selected horizon
+            const t5  = (analysis as any).targets_5d  || analysis.targets;
+            const t10 = (analysis as any).targets_10d || analysis.targets;
+            const tgt = targetHorizon === "5d" ? t5 : t10;
+            const horizonLabel = targetHorizon === "5d" ? "5-Day" : "10-Day";
+            return (
+              <>
+                <PriceTargetBar
+                  currentPrice={current_price}
+                  stopLoss={analysis.stop_loss}
+                  conservative={tgt.conservative}
+                  base={tgt.base}
+                  aggressive={tgt.aggressive}
+                />
 
-              <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {[
-                  { label: "Stop Loss", val: analysis.stop_loss, color: "#ef4444" },
-                  { label: "Risk/Reward", val: null, raw: `1 : ${analysis.risk_reward}`, color: "#60a5fa" },
-                  { label: "T1 (Conservative)", val: analysis.targets.conservative, color: "#86efac" },
-                  { label: "T2 (Base)", val: analysis.targets.base, color: "#4ade80" },
-                  { label: "T3 (Aggressive)", val: analysis.targets.aggressive, color: "#22c55e" },
-                ].map(({ label, val, raw, color }) => (
-                  <div key={label} style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                    <div style={{ fontSize: 9, color: "#475569", fontWeight: 600, marginBottom: 2 }}>{label}</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color }}>
-                      {raw ?? (val ? `₹${val.toLocaleString("en-IN")}` : "—")}
+                <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {[
+                    { label: "Stop Loss", val: analysis.stop_loss, color: "#ef4444" },
+                    { label: "Risk/Reward", val: null, raw: `1 : ${analysis.risk_reward}`, color: "#60a5fa" },
+                    { label: `T1 Conservative (${horizonLabel})`, val: tgt.conservative, color: "#86efac" },
+                    { label: `T2 Base (${horizonLabel})`, val: tgt.base, color: "#4ade80" },
+                    { label: `T3 Aggressive (${horizonLabel})`, val: tgt.aggressive, color: "#22c55e" },
+                  ].map(({ label, val, raw, color }) => (
+                    <div key={label} style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div style={{ fontSize: 9, color: "#475569", fontWeight: 600, marginBottom: 2 }}>{label}</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color }}>
+                        {raw ?? (val ? `₹${val.toLocaleString("en-IN")}` : "—")}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
+                  ))}
+                </div>
+              </>
+            );
+          })() : (
             <div style={{ textAlign: "center", color: "#475569", fontSize: 13, padding: "40px 0" }}>
               Price targets are shown for BUY signals only.<br />
               <span style={{ fontSize: 11, marginTop: 6, display: "block" }}>Current signal: {analysis.signal}</span>

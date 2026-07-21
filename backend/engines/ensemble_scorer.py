@@ -116,6 +116,8 @@ def calculate_composite(
     
     # Target and Stop Loss (Only for Buy/Strong Buy)
     targets = None
+    targets_5d = None
+    targets_10d = None
     stop_loss = None
     rr_ratio = None
     
@@ -123,19 +125,30 @@ def calculate_composite(
     atr = tech_data.get("atr")
 
     if current_price and atr and signal in ["BUY", "STRONG BUY"]:
-        # AI-determined Stop Loss (1.5x ATR below price)
-        stop_loss = current_price - (atr * 1.5)
-        
-        # Targets
-        base_target = current_price + (atr * 2.5) # R:R ~ 1:1.6
-        targets = {
-            "conservative": round(current_price + (atr * 1.5), 2),
-            "base": round(base_target, 2),
-            "aggressive": round(current_price + (atr * 3.5), 2)
+        # ATR-based Stop Loss — 1.5x ATR below entry (same for both horizons;
+        # you'd exit at SL regardless of whether it's a 5d or 10d trade)
+        stop_loss = round(current_price - (atr * 1.5), 2)
+
+        # 5-day targets  — tighter: stock has 5 sessions to move
+        # Roughly 0.5–1.0 ATR realistically achievable in a week
+        targets_5d = {
+            "conservative": round(current_price + (atr * 0.75), 2),
+            "base":         round(current_price + (atr * 1.25), 2),
+            "aggressive":   round(current_price + (atr * 1.75), 2),
         }
-        
-        risk = current_price - stop_loss
-        reward = base_target - current_price
+
+        # 10-day targets — wider: two weeks for the thesis to play out
+        targets_10d = {
+            "conservative": round(current_price + (atr * 1.5), 2),
+            "base":         round(current_price + (atr * 2.5), 2),
+            "aggressive":   round(current_price + (atr * 3.5), 2),
+        }
+
+        # Default `targets` = 5d for backward compat with screener / watchlist cards
+        targets = targets_5d
+
+        risk   = current_price - stop_loss          # ATR * 1.5
+        reward = targets_10d["base"] - current_price # ATR * 2.5
         rr_ratio = round(reward / risk, 2) if risk > 0 else 0
 
     # Position Sizing
@@ -169,8 +182,10 @@ def calculate_composite(
         "signal": signal,
         "confidence": round(confidence, 1),
         "regime": regime,
-        "targets": targets,
-        "stop_loss": round(stop_loss, 2) if stop_loss else None,
+        "targets":     targets,      # 5-day (default, for cards/screener)
+        "targets_5d":  targets_5d if targets_5d else None,
+        "targets_10d": targets_10d if targets_10d else None,
+        "stop_loss": stop_loss,
         "risk_reward": rr_ratio,
         "position_sizing": position_sizing,
         "weights_used": weights,
