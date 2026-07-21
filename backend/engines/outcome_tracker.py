@@ -31,8 +31,8 @@ from backend.config import IST
 
 logger = logging.getLogger(__name__)
 
-# Trading days to check
-CHECK_DAYS = [5, 10]
+# Trading days to check: D1=BTST, D2=2-day, D5=Swing, D10=Positional
+CHECK_DAYS = [1, 2, 5, 10]
 
 # Outcome thresholds
 BREAKEVEN_THRESHOLD  = 0.5   # |P&L| < 0.5% → BREAKEVEN (market noise, not scored)

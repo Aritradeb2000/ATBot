@@ -258,7 +258,7 @@ function NoDataState({ onTrigger, triggering }: { onTrigger: () => void; trigger
         </button>
       </div>
       <div style={{ marginTop: 16, fontSize: 11, color: "#334155" }}>
-        (This button checks if any signals from 5 or 10 trading days ago are ready for evaluation)
+        (This button checks signals from 1, 2, 5, or 10 trading days ago — weekends skipped automatically for BTST/D2)
       </div>
     </div>
   );
@@ -266,7 +266,7 @@ function NoDataState({ onTrigger, triggering }: { onTrigger: () => void; trigger
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function LearnPage() {
-  const [checkDay, setCheckDay]  = useState<5 | 10>(10);  // Bug1: default D10 — more data
+  const [checkDay, setCheckDay]  = useState<1 | 2 | 5 | 10>(10); // default D10 — most data
   const [lookback, setLookback]  = useState(90);
   const [triggering, setTriggering] = useState(false);
   const [triggerMsg, setTriggerMsg] = useState("");
@@ -338,14 +338,21 @@ export default function LearnPage() {
           {/* Controls */}
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <div style={{ display: "flex", gap: 4 }}>
-              {([5, 10] as const).map(d => (
-                <button key={d} onClick={() => setCheckDay(d)} style={{
+              {([
+                { d: 1,  label: "BTST",        sub: "D1" },
+                { d: 2,  label: "D2",           sub: "D2" },
+                { d: 5,  label: "Swing",        sub: "D5" },
+                { d: 10, label: "Positional",   sub: "D10" },
+              ] as const).map(({ d, label, sub }) => (
+                <button key={d} onClick={() => setCheckDay(d as 1 | 2 | 5 | 10)} style={{
                   padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
                   background: checkDay === d ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.04)",
                   border: checkDay === d ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.08)",
                   color: checkDay === d ? "#60a5fa" : "#64748b",
+                  display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.2,
                 }}>
-                  Day {d}
+                  <span>{label}</span>
+                  <span style={{ fontSize: 9, opacity: 0.6 }}>{sub}</span>
                 </button>
               ))}
             </div>

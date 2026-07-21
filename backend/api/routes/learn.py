@@ -74,7 +74,7 @@ def _directional_accuracy(outcomes: list[dict]) -> float:
 @router.get("/learn/stats")
 async def get_learn_stats(
     days: int = Query(default=90, ge=7, le=365, description="Look-back window in days"),
-    check_day: int = Query(default=10, ge=5, le=10, description="5 or 10 day outcomes"),  # Bug1 fix: default D10 has more data
+    check_day: int = Query(default=10, ge=1, le=10, description="1 (BTST), 2, 5, or 10 day outcomes"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -94,7 +94,14 @@ async def get_learn_stats(
         return {
             "total_signals": 0,
             "total_resolved": 0,
+            "total_decisive": 0,
             "overall_win_rate": 0.0,
+            "strict_win_rate": 0.0,
+            "directional_accuracy": 0.0,
+            "win_count": 0,
+            "partial_count": 0,
+            "loss_count": 0,
+            "breakeven_count": 0,
             "avg_pnl_pct": 0.0,
             "avg_pnl_wins": 0.0,
             "avg_loss_pct": 0.0,
@@ -237,7 +244,7 @@ async def get_learn_stats(
 @router.get("/learn/recent")
 async def get_recent_outcomes(
     limit: int = Query(default=50, ge=5, le=200),
-    check_day: int = Query(default=10, ge=5, le=10, description="Filter by check day (5 or 10)"),  # Bug4 fix
+    check_day: int = Query(default=10, ge=1, le=10, description="Filter by check day (1, 2, 5, or 10)"),
     db: AsyncSession = Depends(get_db),
 ):
     """Return the most recent resolved signal outcomes."""
