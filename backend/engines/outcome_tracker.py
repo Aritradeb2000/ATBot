@@ -31,14 +31,39 @@ from backend.config import IST
 
 logger = logging.getLogger(__name__)
 
-# Trading days to check: D1=BTST, D2=2-day, D5=Swing, D10=Positional
-CHECK_DAYS = [1, 2, 5, 10]
+# Trading days to check: D1=BTST, D2=2-day, D5=Swing, D10=Positional, D50=LT, D100=VLT
+CHECK_DAYS = [1, 2, 5, 10, 50, 100]
 
-# Outcome thresholds
-BREAKEVEN_THRESHOLD  = 0.5   # |P&L| < 0.5% → BREAKEVEN (market noise, not scored)
+# ── Short-term outcome thresholds (D1–D10) ───────────────────────────────────
+BREAKEVEN_THRESHOLD  = 0.5   # |P&L| < 0.5% → BREAKEVEN
 SOLID_WIN_THRESHOLD  = 1.5   # P&L ≥ 1.5% → WIN even without hitting target
 TARGET_PROGRESS_WIN  = 0.80  # Reached ≥ 80% of target gap → WIN (NEAR_TARGET)
 PARTIAL_THRESHOLD    = 0.0   # P&L > 0 (above BREAKEVEN) → PARTIAL
+
+# ── Long-term override thresholds per check_day ──────────────────────────────
+# Gains of 1.5% over 50 days are irrelevant (could just be inflation)
+# A real long-term win needs more % move.
+HORIZON_THRESHOLDS = {
+    # check_day: (breakeven_pct, solid_win_pct, partial_min_pct)
+    1:   (0.5,  1.5,  0.5),   # BTST — current defaults
+    2:   (0.5,  1.5,  0.5),
+    5:   (0.5,  1.5,  0.5),
+    10:  (0.5,  2.0,  0.5),
+    50:  (1.5,  5.0,  1.5),   # Long-term: ≥5% = WIN, 1.5-5% = PARTIAL
+    100: (2.0,  8.0,  2.0),   # Very-long-term: ≥8% = WIN, 2-8% = PARTIAL
+}
+
+# ── Long-term ATR multipliers (used when no stored target exists) ─────────────
+# ATR = daily average range; over N days a stock can move ~√N × ATR
+ATR_MULTIPLIERS = {
+    # check_day: (conservative_mult, base_mult, aggressive_mult)
+    1:   (0.5,  0.75, 1.0),
+    2:   (0.6,  0.9,  1.2),
+    5:   (0.75, 1.25, 1.75),
+    10:  (1.5,  2.5,  3.5),
+    50:  (4.0,  6.0,  9.0),   # 2.5-month horizon
+    100: (6.0,  9.0,  13.0),  # 5-month horizon
+}
 
 
 def _get_trading_day_offset(from_date: datetime, n_trading_days: int) -> date:
@@ -76,15 +101,18 @@ def _classify_outcome(
     stop_loss: float,
     target_conservative: float,
     price_at_check: float,
+    check_day: int = 5,          # ← NEW: drives horizon-aware thresholds
 ) -> tuple[str, str]:
     """
     Returns (outcome, outcome_detail).
     outcome: WIN / PARTIAL / LOSS / BREAKEVEN / OPEN
 
-    WIN     — hit ≥ 80% of target gap, or solid gain ≥ 1.5%
-    PARTIAL — right direction but small move (0.5–1.5%, didn't reach target)
-    BREAKEVEN — within ±0.5%, market noise
-    LOSS    — wrong direction, or stop loss hit
+    WIN       — hit ≥ 80% of target gap, or solid gain ≥ solid_win_pct
+    PARTIAL   — right direction but below WIN threshold
+    BREAKEVEN — within ±breakeven_pct (market noise, not scored)
+    LOSS      — wrong direction, or stop loss hit
+
+    Thresholds scale with horizon: D5=1.5% solid win, D50=5%, D100=8%.
     """
     if entry_price is None or entry_price == 0:
         return "OPEN", "NO_ENTRY_PRICE"
@@ -98,8 +126,13 @@ def _classify_outcome(
     is_buy_signal  = signal_upper in ("STRONG BUY", "BUY", "STRONG_BUY")
     is_sell_signal = signal_upper in ("STRONG SELL", "SELL", "STRONG_SELL")
 
+    # Horizon-specific thresholds
+    bev_pct, solid_win_pct, partial_min_pct = HORIZON_THRESHOLDS.get(
+        check_day, (BREAKEVEN_THRESHOLD, SOLID_WIN_THRESHOLD, PARTIAL_THRESHOLD)
+    )
+
     # ── BREAKEVEN: market barely moved — not scored in either direction ──────
-    if abs(pnl_pct) < BREAKEVEN_THRESHOLD:
+    if abs(pnl_pct) < bev_pct:
         return "BREAKEVEN", "WITHIN_TOLERANCE"
 
     if is_buy_signal:
@@ -120,10 +153,12 @@ def _classify_outcome(
                     return "WIN", "NEAR_TARGET"    # ≥ 80% of the way — counts as WIN
 
             # No target data or below 80% progress:
-            if pnl_pct >= SOLID_WIN_THRESHOLD:
+            if pnl_pct >= solid_win_pct:
                 return "WIN", "SOLID_GAIN"         # strong move even without target
-            else:
+            elif pnl_pct >= partial_min_pct:
                 return "PARTIAL", "PARTIAL_GAIN"  # right direction but weak
+            else:
+                return "LOSS", "PARTIAL_LOSS"      # above BREAKEVEN but below partial
         else:
             return "LOSS", "PARTIAL_LOSS"
 
@@ -142,10 +177,12 @@ def _classify_outcome(
                 progress_pct = actual_fall / target_gap
                 if progress_pct >= TARGET_PROGRESS_WIN:
                     return "WIN", "NEAR_TARGET"
-            if abs_fall >= SOLID_WIN_THRESHOLD:
+            if abs_fall >= solid_win_pct:
                 return "WIN", "SOLID_FALL"
-            else:
+            elif abs_fall >= partial_min_pct:
                 return "PARTIAL", "PARTIAL_FALL"
+            else:
+                return "LOSS", "PARTIAL_RISE"
         else:
             return "LOSS", "PARTIAL_RISE"
 
@@ -226,16 +263,25 @@ async def run_outcome_check():
                 pnl_percent = round(((price - entry_price) / entry_price) * 100, 2) if entry_price else None
 
                 # Select the correct target based on the check horizon
-                # D1/D2/D5 → 5-day targets (tighter, achievable in a week)
-                # D10       → 10-day targets (wider, two-week hold)
                 if check_day <= 5:
                     t_conservative = score.target_low_5d  or score.target_base_5d or 0.0
                     t_base         = score.target_base_5d or score.target_low_5d  or 0.0
                     t_aggressive   = score.target_high_5d or score.target_base_5d or 0.0
-                else:  # D10
+                elif check_day <= 10:
                     t_conservative = score.target_low_10d  or score.target_low_5d  or 0.0
                     t_base         = score.target_base_10d or score.target_base_5d or 0.0
                     t_aggressive   = score.target_high_10d or score.target_high_5d or 0.0
+                else:
+                    # D50/D100: compute from ATR stored at signal time
+                    # No separate DB columns — compute now using stored atr_14
+                    atr = score.atr_14 or 0.0
+                    mults = ATR_MULTIPLIERS.get(check_day, ATR_MULTIPLIERS[100])
+                    if atr and entry_price:
+                        t_conservative = round(entry_price + atr * mults[0], 2)
+                        t_base         = round(entry_price + atr * mults[1], 2)
+                        t_aggressive   = round(entry_price + atr * mults[2], 2)
+                    else:
+                        t_conservative = t_base = t_aggressive = 0.0
 
                 outcome, detail = _classify_outcome(
                     signal             = score.signal or "HOLD",
@@ -243,6 +289,7 @@ async def run_outcome_check():
                     stop_loss          = score.stop_loss or 0.0,
                     target_conservative= t_conservative,
                     price_at_check     = price,
+                    check_day          = check_day,   # ← horizon-aware thresholds
                 )
 
                 outcome_row = SignalOutcome(

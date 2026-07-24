@@ -266,7 +266,7 @@ function NoDataState({ onTrigger, triggering }: { onTrigger: () => void; trigger
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function LearnPage() {
-  const [checkDay, setCheckDay]  = useState<1 | 2 | 5 | 10>(10); // default D10 — most data
+  const [checkDay, setCheckDay]  = useState<1 | 2 | 5 | 10 | 50 | 100>(10); // default D10 — most data
   const [lookback, setLookback]  = useState(90);
   const [triggering, setTriggering] = useState(false);
   const [triggerMsg, setTriggerMsg] = useState("");
@@ -337,14 +337,16 @@ export default function LearnPage() {
 
           {/* Controls */}
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <div style={{ display: "flex", gap: 4 }}>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
               {([
-                { d: 1,  label: "BTST",        sub: "D1" },
-                { d: 2,  label: "D2",           sub: "D2" },
-                { d: 5,  label: "Swing",        sub: "D5" },
-                { d: 10, label: "Positional",   sub: "D10" },
+                { d: 1,   label: "BTST",     sub: "D1" },
+                { d: 2,   label: "D2",        sub: "D2" },
+                { d: 5,   label: "Swing",     sub: "D5" },
+                { d: 10,  label: "Positional",sub: "D10" },
+                { d: 50,  label: "Long-Term", sub: "D50" },
+                { d: 100, label: "V.Long-Term",sub: "D100" },
               ] as const).map(({ d, label, sub }) => (
-                <button key={d} onClick={() => setCheckDay(d as 1 | 2 | 5 | 10)} style={{
+                <button key={d} onClick={() => setCheckDay(d as 1 | 2 | 5 | 10 | 50 | 100)} style={{
                   padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
                   background: checkDay === d ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.04)",
                   border: checkDay === d ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.08)",

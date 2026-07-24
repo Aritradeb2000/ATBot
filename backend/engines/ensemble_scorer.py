@@ -116,8 +116,10 @@ def calculate_composite(
     
     # Target and Stop Loss (Only for Buy/Strong Buy)
     targets = None
-    targets_5d = None
+    targets_5d  = None
     targets_10d = None
+    targets_50d  = None
+    targets_100d = None
     stop_loss = None
     rr_ratio = None
     
@@ -125,12 +127,11 @@ def calculate_composite(
     atr = tech_data.get("atr")
 
     if current_price and atr and signal in ["BUY", "STRONG BUY"]:
-        # ATR-based Stop Loss — 1.5x ATR below entry (same for both horizons;
-        # you'd exit at SL regardless of whether it's a 5d or 10d trade)
+        # ATR-based Stop Loss — 1.5x ATR below entry (same for all horizons;
+        # you'd exit at SL regardless of whether it's a 5d or 100d trade)
         stop_loss = round(current_price - (atr * 1.5), 2)
 
-        # 5-day targets  — tighter: stock has 5 sessions to move
-        # Roughly 0.5–1.0 ATR realistically achievable in a week
+        # 5-day targets — tighter: stock has 5 sessions to move
         targets_5d = {
             "conservative": round(current_price + (atr * 0.75), 2),
             "base":         round(current_price + (atr * 1.25), 2),
@@ -142,6 +143,20 @@ def calculate_composite(
             "conservative": round(current_price + (atr * 1.5), 2),
             "base":         round(current_price + (atr * 2.5), 2),
             "aggressive":   round(current_price + (atr * 3.5), 2),
+        }
+
+        # 50-day targets — long-term: ~2.5 months, fundamentals drive returns
+        targets_50d = {
+            "conservative": round(current_price + (atr * 4.0), 2),
+            "base":         round(current_price + (atr * 6.0), 2),
+            "aggressive":   round(current_price + (atr * 9.0), 2),
+        }
+
+        # 100-day targets — very long-term: ~5 months, deep value / sector thesis
+        targets_100d = {
+            "conservative": round(current_price + (atr * 6.0),  2),
+            "base":         round(current_price + (atr * 9.0),  2),
+            "aggressive":   round(current_price + (atr * 13.0), 2),
         }
 
         # Default `targets` = 5d for backward compat with screener / watchlist cards
@@ -182,14 +197,16 @@ def calculate_composite(
         "signal": signal,
         "confidence": round(confidence, 1),
         "regime": regime,
-        "targets":     targets,      # 5-day (default, for cards/screener)
-        "targets_5d":  targets_5d if targets_5d else None,
-        "targets_10d": targets_10d if targets_10d else None,
+        "targets":      targets,       # 5-day (default, for cards/screener)
+        "targets_5d":   targets_5d   if targets_5d   else None,
+        "targets_10d":  targets_10d  if targets_10d  else None,
+        "targets_50d":  targets_50d  if targets_50d  else None,
+        "targets_100d": targets_100d if targets_100d else None,
         "stop_loss": stop_loss,
         "risk_reward": rr_ratio,
         "position_sizing": position_sizing,
         "weights_used": weights,
-        "weights_source": weights_source,  # "adaptive" or "regime"
+        "weights_source": weights_source,
         "components": {
             "technical": t_score,
             "fundamental": f_score,

@@ -75,7 +75,7 @@ export default function StockDetailPage({ params }: Props) {
   );
 
   const [activeTab, setActiveTab] = useState<"signals" | "fundamental" | "sentiment">("signals");
-  const [targetHorizon, setTargetHorizon] = useState<"5d" | "10d">("5d");
+  const [targetHorizon, setTargetHorizon] = useState<"5d" | "10d" | "50d" | "100d">("5d");
 
   if (isLoading) {
     return (
@@ -316,18 +316,23 @@ export default function StockDetailPage({ params }: Props) {
 
         {/* Price Targets + Position Sizing */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card p-6">
-          {/* Header + 5D/10D toggle */}
+          {/* Header + horizon toggle */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
             <h3 style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", margin: 0 }}>PRICE TARGETS</h3>
-            <div style={{ display: "flex", gap: 4 }}>
-              {(["5d", "10d"] as const).map(h => (
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {([
+                { h: "5d",   label: "5D Swing" },
+                { h: "10d",  label: "10D Pos." },
+                { h: "50d",  label: "50D LT" },
+                { h: "100d", label: "100D VLT" },
+              ] as const).map(({ h, label }) => (
                 <button key={h} onClick={() => setTargetHorizon(h)} style={{
-                  padding: "4px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                  padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer",
                   background: targetHorizon === h ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.04)",
                   border: targetHorizon === h ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.08)",
                   color: targetHorizon === h ? "#60a5fa" : "#475569",
                 }}>
-                  {h === "5d" ? "5D Swing" : "10D Positional"}
+                  {label}
                 </button>
               ))}
             </div>
@@ -335,10 +340,18 @@ export default function StockDetailPage({ params }: Props) {
 
           {analysis.targets && analysis.stop_loss && current_price ? (() => {
             // Pick targets based on selected horizon
-            const t5  = (analysis as any).targets_5d  || analysis.targets;
-            const t10 = (analysis as any).targets_10d || analysis.targets;
-            const tgt = targetHorizon === "5d" ? t5 : t10;
-            const horizonLabel = targetHorizon === "5d" ? "5-Day" : "10-Day";
+            const a = analysis as any;
+            const horizonMap: Record<string, any> = {
+              "5d":   a.targets_5d   || analysis.targets,
+              "10d":  a.targets_10d  || analysis.targets,
+              "50d":  a.targets_50d  || a.targets_10d || analysis.targets,
+              "100d": a.targets_100d || a.targets_50d || analysis.targets,
+            };
+            const tgt = horizonMap[targetHorizon];
+            const horizonLabel: Record<string, string> = {
+              "5d": "5-Day Swing", "10d": "10-Day Positional",
+              "50d": "50-Day Long-Term", "100d": "100-Day Very Long-Term",
+            };
             return (
               <>
                 <PriceTargetBar
@@ -353,9 +366,9 @@ export default function StockDetailPage({ params }: Props) {
                   {[
                     { label: "Stop Loss", val: analysis.stop_loss, color: "#ef4444" },
                     { label: "Risk/Reward", val: null, raw: `1 : ${analysis.risk_reward}`, color: "#60a5fa" },
-                    { label: `T1 Conservative (${horizonLabel})`, val: tgt.conservative, color: "#86efac" },
-                    { label: `T2 Base (${horizonLabel})`, val: tgt.base, color: "#4ade80" },
-                    { label: `T3 Aggressive (${horizonLabel})`, val: tgt.aggressive, color: "#22c55e" },
+                    { label: `T1 Conservative (${horizonLabel[targetHorizon]})`, val: tgt.conservative, color: "#86efac" },
+                    { label: `T2 Base (${horizonLabel[targetHorizon]})`, val: tgt.base, color: "#4ade80" },
+                    { label: `T3 Aggressive (${horizonLabel[targetHorizon]})`, val: tgt.aggressive, color: "#22c55e" },
                   ].map(({ label, val, raw, color }) => (
                     <div key={label} style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
                       <div style={{ fontSize: 9, color: "#475569", fontWeight: 600, marginBottom: 2 }}>{label}</div>
