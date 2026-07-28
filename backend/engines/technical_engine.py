@@ -4,8 +4,14 @@ Calculates technical indicators using pandas-ta and scores the stock
 from 0 to 100 based on momentum, trend, and volume.
 """
 
+import warnings
 import pandas as pd
-import pandas_ta as ta
+# pandas-ta prints "TA-Lib not available" to stderr on import — suppress it.
+# ATBot uses pandas-ta's built-in pure-Python indicators; TA-Lib is optional and not needed.
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message=".*TA.Lib.*", category=UserWarning)
+    warnings.filterwarnings("ignore", message=".*talib.*", category=UserWarning)
+    import pandas_ta as ta
 import logging
 
 logger = logging.getLogger(__name__)
@@ -69,9 +75,18 @@ def analyze_technical(df: pd.DataFrame) -> dict:
             df["Supertrend"] = None
             df["Supertrend_dir"] = None
 
-        # Run Candlestick patterns (only returns non-zero if found)
-        # Note: pandas-ta automatically prefixes these with CDL_
-        cdl = df.ta.cdl_pattern(name="all")
+        # Run Candlestick patterns — requires TA-Lib (C extension, optional).
+        # Suppress the "TA-Lib not available" warning; patterns contribute a small
+        # bonus/penalty only — the engine scores correctly without them.
+        cdl = None
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message=".*TA.Lib.*")
+                warnings.filterwarnings("ignore", message=".*talib.*")
+                warnings.filterwarnings("ignore", category=UserWarning)
+                cdl = df.ta.cdl_pattern(name="all")
+        except Exception:
+            pass  # TA-Lib not installed — skip candlestick patterns silently
         if cdl is not None and not cdl.empty:
             df = pd.concat([df, cdl], axis=1)
 
