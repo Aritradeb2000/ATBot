@@ -287,14 +287,14 @@ async def run_screener(
 
     if is_custom:
         sym_list = [s.strip().upper() for s in (symbols or "").split(",") if s.strip()] or NIFTY50_SYMBOLS
-        sym_list = sym_list[:limit]
         cache = get_cache()
         logger.info(f"Screener (LIVE): {len(sym_list)} symbols")
         raw_results = await _run_live_batch(sym_list, cache)
         data_source = "live"
         last_computed = datetime.now(IST).isoformat()
     else:
-        sym_list = get_universe(universe)[:limit]
+        # !! Do NOT apply limit here — scan the full universe, limit only the response !!
+        sym_list = get_universe(universe)  # full 50 or 200 symbols
         logger.info(f"Screener (PRE-COMPUTED): reading {len(sym_list)} symbols from DB")
         raw_results, last_computed = await _read_precomputed(sym_list)
 
@@ -302,13 +302,17 @@ async def run_screener(
         if not raw_results:
             logger.warning("Screener: no pre-computed data found, falling back to live scan")
             cache = get_cache()
-            raw_results = await _run_live_batch(sym_list[:50], cache)  # cap at 50 for live fallback
+            # Cap live fallback at 100 to avoid timeout; show a warning in response
+            live_cap = min(len(sym_list), 100)
+            raw_results = await _run_live_batch(sym_list[:live_cap], cache)
             data_source = "live_fallback"
             last_computed = datetime.now(IST).isoformat()
         else:
             data_source = "precomputed"
 
     filtered = _apply_filters(raw_results, signal, min_score, min_rsi, max_rsi, preset, sort_by)
+    # Apply limit to the final displayed results (not to what was scanned)
+    displayed = filtered[:limit]
 
     return {
         "total_scanned":  len(sym_list),
@@ -318,7 +322,7 @@ async def run_screener(
         "universe":       universe,
         "data_source":    data_source,
         "last_computed":  last_computed,
-        "results":        filtered,
+        "results":        displayed,   # limit applied here, not at scan time
     }
 
 # ── GET /api/screener/top-signals ─────────────────────────────────────────────
