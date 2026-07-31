@@ -286,9 +286,14 @@ async def run_screener(
     is_custom = universe == "custom" or live
 
     if is_custom:
-        sym_list = [s.strip().upper() for s in (symbols or "").split(",") if s.strip()] or NIFTY50_SYMBOLS
+        if symbols:
+            # Explicit symbol list provided (custom universe mode)
+            sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+        else:
+            # live=True but no explicit symbols — respect the selected universe (nifty50/nifty200)
+            sym_list = get_universe(universe)
         cache = get_cache()
-        logger.info(f"Screener (LIVE): {len(sym_list)} symbols")
+        logger.info(f"Screener (LIVE): {len(sym_list)} symbols from universe='{universe}'")
         raw_results = await _run_live_batch(sym_list, cache)
         data_source = "live"
         last_computed = datetime.now(IST).isoformat()
