@@ -474,3 +474,26 @@ async def trigger_nightly_precompute(universe: str = Query(default="nifty200")):
         "universe": universe,
         "message": f"Nightly pre-computation started for {universe}. Poll /api/screener/status for progress.",
     }
+
+
+# ── POST /api/screener/trigger-daily ─────────────────────────────────────────
+# Convenience alias: manually fire the 3:15 PM daily Nifty 50 screener.
+# Useful when the server was offline at 3:15 PM and you missed the auto-run.
+
+@router.post("/screener/trigger-daily")
+async def trigger_daily_screener():
+    """
+    Manually trigger the 3:15 PM daily auto-screener (Nifty 50 → saves to DB).
+    Runs in background — results appear in the Screener page once complete.
+    """
+    from backend.data.scheduler import job_daily_screener
+    cache = get_cache()
+
+    if cache.get("nightly_status", {}).get("status") == "running":
+        return {"status": "already_running", "message": "A pre-compute job is already in progress"}
+
+    asyncio.create_task(job_daily_screener())
+    return {
+        "status": "started",
+        "message": "Daily screener (Nifty 50) started. Results will be in DB in ~3-5 minutes.",
+    }
