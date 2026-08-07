@@ -144,7 +144,9 @@ async def generate_accuracy_report(days: int = 90, check_day: int = 10) -> str:
 
     total_signals  = len(rows)
     total_resolved = len(decisive)      # matches dashboard "X resolved signals"
-    win_rate       = round((len(wins) / total_resolved) * 100, 1) if total_resolved else 0.0
+    # Weighted win rate: WIN=1.0, PARTIAL=0.5, LOSS=0 — identical to dashboard formula
+    weighted_wins  = len(wins) + 0.5 * len(partials)
+    win_rate       = round((weighted_wins / total_resolved) * 100, 1) if total_resolved else 0.0
     avg_pnl        = round(sum(r.pnl_percent or 0 for r in decisive) / total_resolved, 2) if total_resolved else 0.0
     avg_win_pnl    = round(sum(r.pnl_percent or 0 for r in wins) / len(wins), 2) if wins else 0.0
     avg_loss_pnl   = round(sum(r.pnl_percent or 0 for r in losses) / len(losses), 2) if losses else 0.0
