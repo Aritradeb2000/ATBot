@@ -131,21 +131,27 @@ async def generate_accuracy_report(days: int = 90, check_day: int = 10) -> str:
         rows = result.scalars().all()
 
     # ── Compute Stats ─────────────────────────────────────────────────────────
-    resolved = [r for r in rows if r.outcome in ("WIN", "LOSS", "BREAKEVEN")]
-    wins     = [r for r in resolved if r.outcome == "WIN"]
-    losses   = [r for r in resolved if r.outcome == "LOSS"]
-    holds    = [r for r in rows if r.outcome in ("OPEN",)]
+    # Use the same methodology as the dashboard (learn.py):
+    #   decisive  = WIN + PARTIAL + LOSS  (BREAKEVEN excluded — it's market noise)
+    #   win_rate  = WIN / decisive
+    #   total_resolved shown to user = decisive (consistent with dashboard header)
+    all_resolved = [r for r in rows if r.outcome in ("WIN", "LOSS", "BREAKEVEN", "PARTIAL")]
+    decisive     = [r for r in rows if r.outcome in ("WIN", "PARTIAL", "LOSS")]
+    wins         = [r for r in decisive if r.outcome == "WIN"]
+    partials     = [r for r in decisive if r.outcome == "PARTIAL"]
+    losses       = [r for r in decisive if r.outcome == "LOSS"]
+    breakevens   = [r for r in rows    if r.outcome == "BREAKEVEN"]
 
     total_signals  = len(rows)
-    total_resolved = len(resolved)
+    total_resolved = len(decisive)      # matches dashboard "X resolved signals"
     win_rate       = round((len(wins) / total_resolved) * 100, 1) if total_resolved else 0.0
-    avg_pnl        = round(sum(r.pnl_percent or 0 for r in resolved) / total_resolved, 2) if total_resolved else 0.0
+    avg_pnl        = round(sum(r.pnl_percent or 0 for r in decisive) / total_resolved, 2) if total_resolved else 0.0
     avg_win_pnl    = round(sum(r.pnl_percent or 0 for r in wins) / len(wins), 2) if wins else 0.0
     avg_loss_pnl   = round(sum(r.pnl_percent or 0 for r in losses) / len(losses), 2) if losses else 0.0
 
-    # By signal
+    # By signal — use decisive outcomes only (matches dashboard)
     by_signal: dict = {}
-    for r in resolved:
+    for r in decisive:
         sig = r.signal or "UNKNOWN"
         if sig not in by_signal:
             by_signal[sig] = {"total": 0, "wins": 0, "losses": 0, "pnl": []}
@@ -157,9 +163,9 @@ async def generate_accuracy_report(days: int = 90, check_day: int = 10) -> str:
         if r.pnl_percent is not None:
             by_signal[sig]["pnl"].append(r.pnl_percent)
 
-    # Top / worst stocks
+    # Top / worst stocks — use decisive outcomes only
     by_stock: dict = {}
-    for r in resolved:
+    for r in decisive:
         if r.symbol not in by_stock:
             by_stock[r.symbol] = {"total": 0, "wins": 0, "pnl": []}
         by_stock[r.symbol]["total"] += 1
