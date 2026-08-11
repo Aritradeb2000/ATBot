@@ -284,7 +284,7 @@ async def job_daily_screener():
     → meta-learner adjusts weights automatically.
     No manual screener interaction needed from the user.
     """
-    logger.info("🤖 [Scheduler] Starting daily auto-screener (Nifty 50)...")
+    logger.info("🤖 [Scheduler] Starting daily auto-screener (Nifty 200)...")
     try:
         import asyncio
         from backend.data.market_data import fetch_ohlcv
@@ -335,7 +335,8 @@ async def job_daily_screener():
                     nifty_change=nifty_change, nifty_change_20d=nifty_change_20d, vix=vix,
                 )
 
-                targets = final.get("targets") or {}
+                targets_5d  = final.get("targets_5d")  or final.get("targets") or {}
+                targets_10d = final.get("targets_10d") or targets_5d
                 record = AnalysisScore(
                     symbol=symbol,
                     technical_score=final.get("components", {}).get("technical"),
@@ -345,17 +346,17 @@ async def job_daily_screener():
                     signal=final.get("signal"),
                     confidence=final.get("confidence", 0.8),
                     current_price=tech_result.get("close"),
-                    target_low_5d=targets.get("conservative"),
-                    target_base_5d=targets.get("base"),
-                    target_high_5d=targets.get("aggressive"),
-                    target_low_10d=targets.get("conservative"),
-                    target_base_10d=targets.get("base"),
-                    target_high_10d=targets.get("aggressive"),
+                    target_low_5d=targets_5d.get("conservative"),
+                    target_base_5d=targets_5d.get("base"),
+                    target_high_5d=targets_5d.get("aggressive"),
+                    target_low_10d=targets_10d.get("conservative"),
+                    target_base_10d=targets_10d.get("base"),
+                    target_high_10d=targets_10d.get("aggressive"),
                     stop_loss=final.get("stop_loss"),
                     active_signals=json.dumps(tech_result.get("signals", [])),
                     dominant_pattern=tech_result.get("trend"),
                     atr_14=tech_result.get("atr"),
-                    regime=today_regime,  # v2: label regime at time of scan
+                    regime=today_regime,
                 )
                 async with AsyncSessionLocal() as db:
                     db.add(record)
@@ -365,10 +366,11 @@ async def job_daily_screener():
                 logger.warning(f"Auto-screener: skipping {symbol} — {e}")
                 errors += 1
 
-        for i in range(0, len(NIFTY50_SYMBOLS), BATCH_SIZE):
-            batch = NIFTY50_SYMBOLS[i: i + BATCH_SIZE]
+        from backend.data.nse_universe import NIFTY200 as SCAN_SYMBOLS
+        for i in range(0, len(SCAN_SYMBOLS), BATCH_SIZE):
+            batch = SCAN_SYMBOLS[i: i + BATCH_SIZE]
             await asyncio.gather(*[_score_one(s) for s in batch])
-            logger.info(f"  Auto-screener: {min(i + BATCH_SIZE, len(NIFTY50_SYMBOLS))}/{len(NIFTY50_SYMBOLS)} done")
+            logger.info(f"  Auto-screener: {min(i + BATCH_SIZE, len(SCAN_SYMBOLS))}/{len(SCAN_SYMBOLS)} done")
 
         _cache["last_updated"]["daily_screener"] = datetime.now(IST).isoformat()
         logger.info(f"✅ Daily auto-screener complete — {saved} saved, {errors} skipped")
