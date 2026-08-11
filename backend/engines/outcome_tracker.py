@@ -240,8 +240,9 @@ async def run_outcome_check():
             logger.info(f"  D{check_day}: After dedup: {len(scores)} unique symbol(s)")
 
             for score in scores:
-                # Skip if already checked for this check_day
-                existing = await db.execute(
+                # Skip ONLY if already RESOLVED (WIN/LOSS/PARTIAL/BREAKEVEN).
+                # OPEN records = price-fetch failures that should be retried each run.
+                existing_result = await db.execute(
                     select(SignalOutcome).where(
                         and_(
                             SignalOutcome.analysis_score_id == score.id,
@@ -249,12 +250,34 @@ async def run_outcome_check():
                         )
                     )
                 )
-                if existing.scalar_one_or_none():
-                    continue  # Already recorded
+                existing_row = existing_result.scalar_one_or_none()
+                if existing_row and existing_row.outcome != "OPEN":
+                    continue  # Already resolved — don't overwrite
 
-                # Fetch price at today's date
+                # Fetch price at today's date (or the check date for overdue retries)
                 price = _fetch_close_price(score.symbol, today)
                 if price is None:
+                    if not existing_row:
+                        # No record yet and no price — create placeholder OPEN row
+                        # so we know this signal was attempted (and retry next run)
+                        db.add(SignalOutcome(
+                            analysis_score_id = score.id,
+                            symbol            = score.symbol,
+                            signal            = score.signal,
+                            composite_score   = score.composite_score,
+                            technical_score   = score.technical_score,
+                            fundamental_score = score.fundamental_score,
+                            sentiment_score   = score.sentiment_score,
+                            confidence        = score.confidence,
+                            entry_date        = score.timestamp,
+                            entry_price       = score.current_price or 0.0,
+                            stop_loss         = score.stop_loss,
+                            check_day         = check_day,
+                            check_date        = datetime.now(IST),
+                            outcome           = "OPEN",
+                            outcome_detail    = "PRICE_UNAVAILABLE",
+                            regime            = getattr(score, "regime", None) or "SIDEWAYS",
+                        ))
                     logger.warning(f"  Skipping {score.symbol} — could not fetch price")
                     continue
 
@@ -292,31 +315,44 @@ async def run_outcome_check():
                     check_day          = check_day,   # ← horizon-aware thresholds
                 )
 
-                outcome_row = SignalOutcome(
-                    analysis_score_id   = score.id,
-                    symbol              = score.symbol,
-                    signal              = score.signal,
-                    composite_score     = score.composite_score,
-                    technical_score     = score.technical_score,
-                    fundamental_score   = score.fundamental_score,
-                    sentiment_score     = score.sentiment_score,
-                    confidence          = score.confidence,
-                    entry_date          = score.timestamp,
-                    entry_price         = entry_price,
-                    stop_loss           = score.stop_loss,
-                    target_conservative = t_conservative,
-                    target_base         = t_base,
-                    target_aggressive   = t_aggressive,
-                    check_day           = check_day,
-                    check_date          = datetime.now(IST),
-                    price_at_check      = price,
-                    pnl_amount          = pnl_amount,
-                    pnl_percent         = pnl_percent,
-                    outcome             = outcome,
-                    outcome_detail      = detail,
-                    regime              = getattr(score, "regime", None) or "SIDEWAYS",  # v2
-                )
-                db.add(outcome_row)
+                if existing_row:
+                    # UPDATE the stuck OPEN row in-place
+                    existing_row.price_at_check      = price
+                    existing_row.pnl_amount          = pnl_amount
+                    existing_row.pnl_percent         = pnl_percent
+                    existing_row.outcome             = outcome
+                    existing_row.outcome_detail      = detail
+                    existing_row.target_conservative = t_conservative
+                    existing_row.target_base         = t_base
+                    existing_row.target_aggressive   = t_aggressive
+                    existing_row.check_date          = datetime.now(IST)
+                    logger.info(f"  Resolved stuck OPEN: {score.symbol} D{check_day} → {outcome}")
+                else:
+                    outcome_row = SignalOutcome(
+                        analysis_score_id   = score.id,
+                        symbol              = score.symbol,
+                        signal              = score.signal,
+                        composite_score     = score.composite_score,
+                        technical_score     = score.technical_score,
+                        fundamental_score   = score.fundamental_score,
+                        sentiment_score     = score.sentiment_score,
+                        confidence          = score.confidence,
+                        entry_date          = score.timestamp,
+                        entry_price         = entry_price,
+                        stop_loss           = score.stop_loss,
+                        target_conservative = t_conservative,
+                        target_base         = t_base,
+                        target_aggressive   = t_aggressive,
+                        check_day           = check_day,
+                        check_date          = datetime.now(IST),
+                        price_at_check      = price,
+                        pnl_amount          = pnl_amount,
+                        pnl_percent         = pnl_percent,
+                        outcome             = outcome,
+                        outcome_detail      = detail,
+                        regime              = getattr(score, "regime", None) or "SIDEWAYS",  # v2
+                    )
+                    db.add(outcome_row)
                 checked += 1
 
         await db.commit()
