@@ -131,31 +131,29 @@ def get_delivery_data(symbol: str) -> Optional[dict]:
 def get_market_breadth() -> Optional[dict]:
     """
     Get NSE market breadth: advances, declines, unchanged.
-    A key market health indicator.
+    Uses /api/allIndices (NSE removed /api/market-status — returns 404).
     """
     try:
-        url = f"{NSE_BASE}/api/market-status"
-        data = _nse_session.get(url)
+        # /api/market-status was removed by NSE — use allIndices instead
+        url = f"{NSE_BASE}/api/allIndices"
+        indices_data = _nse_session.get(url)
 
-        if not data:
+        if not indices_data:
             return None
-
-        # Also fetch advance/decline from equity market
-        url2 = f"{NSE_BASE}/api/allIndices"
-        indices_data = _nse_session.get(url2)
 
         breadth = {
             "timestamp": datetime.now(IST).isoformat(),
-            "market_status": data.get("marketState", [{}])[0].get("marketStatus", "Unknown"),
+            "market_status": "Unknown",
         }
 
-        if indices_data:
-            for item in indices_data.get("data", []):
-                if item.get("index") == "NIFTY 50":
-                    breadth["nifty_advances"] = item.get("advances", 0)
-                    breadth["nifty_declines"] = item.get("declines", 0)
-                    breadth["nifty_unchanged"] = item.get("unchanged", 0)
-                    break
+        for item in indices_data.get("data", []):
+            if item.get("index") == "NIFTY 50":
+                breadth["nifty_advances"]  = item.get("advances",  0)
+                breadth["nifty_declines"]  = item.get("declines",  0)
+                breadth["nifty_unchanged"] = item.get("unchanged", 0)
+                # allIndices carries a timestamp — if present the market is open
+                breadth["market_status"] = "Market Open" if item.get("lastUpdateTime") else "Market Closed"
+                break
 
         return breadth
 
