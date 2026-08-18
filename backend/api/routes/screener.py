@@ -35,7 +35,7 @@ from backend.config import IST
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Screener"])
 
-BATCH_SIZE = 8  # concurrent yfinance calls
+BATCH_SIZE = 16  # concurrent yfinance calls (doubled — safe for yfinance rate limits)
 
 # How old can a pre-computed record be and still be served (in hours)
 PRECOMPUTE_MAX_AGE_H = 26   # covers weekends (Mon 4 PM → Wed 4 PM = 48h, but next day is Tue)

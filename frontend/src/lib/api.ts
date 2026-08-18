@@ -132,7 +132,7 @@ export interface ScreenerParams {
 export async function runScreener(params: ScreenerParams = {}): Promise<ScreenerResponse> {
   const res = await api.get("/api/screener", {
     params,
-    timeout: 120000,  // 2 min timeout for full Nifty 50 scan
+    timeout: 480000,  // 8 min timeout — Nifty 200 live scan takes ~3-4 min
   });
   return res.data;
 }

@@ -9,7 +9,7 @@ export default function MarketTicker() {
 
   const items = data
     ? Object.entries(data.indices)
-        .filter(([name]) => name !== "SGX_NIFTY")  // skip pre-market proxy
+        .filter(([name]) => name !== "GIFT_NIFTY")  // GIFT Nifty not yet on yfinance
         .map(([name, info]) => ({
           label: name.replace(/_/g, " "),  // INDIA_VIX -> INDIA VIX
           price: info.price,

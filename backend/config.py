@@ -82,7 +82,7 @@ INDEX_TICKERS = {
     "SENSEX": "^BSESN",
     "NIFTYMIDCAP": "^NSEMDCP50",
     "INDIA_VIX": "^INDIAVIX",
-    "SGX_NIFTY": "^SGXNIFTY",      # Proxy for pre-market
+    # GIFT Nifty (formerly SGX Nifty) — not yet available on yfinance (^SGXNIFTY delisted)
 }
 
 # ── Global cue tickers (for morning briefing) ────────────────────────────
