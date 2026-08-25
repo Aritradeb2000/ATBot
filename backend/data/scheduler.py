@@ -147,7 +147,7 @@ async def job_refresh_fundamentals():
 async def job_refresh_fii_dii():
     """
     Refresh FII/DII flow data.
-    Runs daily at 6 PM IST (NSE publishes after market close).
+    Runs daily at 6:30 PM IST (NSE sometimes publishes late after market close).
     Persists to fii_dii_flow DB table for historical tracking.
     """
     logger.info("🏦 [Scheduler] Refreshing FII/DII data...")
@@ -743,7 +743,7 @@ def setup_scheduler():
 
     scheduler.add_job(
         job_refresh_fii_dii,
-        trigger=CronTrigger(hour=18, minute=15, timezone=IST),
+        trigger=CronTrigger(hour=18, minute=30, timezone=IST),
         id="fii_dii",
         name="FII/DII Data Refresh",
         replace_existing=True,
