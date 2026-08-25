@@ -7,22 +7,24 @@ import {
   type LearnStats, type OutcomeRecord,
 } from "@/lib/api";
 
-// ── Meta-Learner v2 Types ─────────────────────────────────────────────────────
+// ── Meta-Learner v3 Types ─────────────────────────────────────────────────────
 interface RegimeWeightInfo { T: number; F: number; S: number; samples: number; status: string; is_active: boolean; }
-interface MetaWeightsV2 {
+interface MetaWeightsV3 {
   version: string; source: string; status: string;
   current_regime: string; last_updated: string | null;
   total_samples: number; ewma: { lambda: number; half_life_days: number };
   min_samples_per_regime: number;
+  validation_accuracy: number | null;
+  regime_shift_detected: boolean;
   regime_weights: { BULL: RegimeWeightInfo; BEAR: RegimeWeightInfo; SIDEWAYS: RegimeWeightInfo };
   global_weights: { T: number; F: number; S: number };
   message?: string;
 }
 
-// ── Meta-Learner v2 Card ──────────────────────────────────────────────────────
-function MetaLearnerV2Card() {
-  const { data: mw } = useSWR<MetaWeightsV2>(
-    "meta-weights-v2",
+// ── Meta-Learner v3 Card ──────────────────────────────────────────────────────
+function MetaLearnerV3Card() {
+  const { data: mw } = useSWR<MetaWeightsV3>(
+    "meta-weights-v3",
     () => fetch("http://localhost:8000/api/learn/meta-weights").then(r => r.json()),
     { revalidateOnFocus: false, refreshInterval: 60000 }
   );
@@ -39,7 +41,7 @@ function MetaLearnerV2Card() {
       className="glass-card p-6" style={{ gridColumn: "1 / -1" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em" }}>META-LEARNER v2 — ADAPTIVE WEIGHTS</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em" }}>META-LEARNER v3 — ADAPTIVE WEIGHTS</div>
           <div style={{ fontSize: 11, color: "#334155", marginTop: 4 }}>
             Regime-conditioned weights · EWMA λ={mw?.ewma.lambda ?? 0.92} (half-life {mw?.ewma.half_life_days ?? 8}d) · Confidence-weighted
           </div>
@@ -149,9 +151,21 @@ function MetaLearnerV2Card() {
         <div style={{ marginTop: 12, fontSize: 11, color: "#475569", textAlign: "center" }}>{mw.message}</div>
       )}
       {mw?.last_updated && (
-        <div style={{ marginTop: 8, fontSize: 10, color: "#334155", textAlign: "right" }}>
-          Last trained: {new Date(mw.last_updated).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST
-          · {mw.total_samples} total samples
+        <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", fontSize: 10, color: "#334155" }}>
+          <div>
+            {mw.validation_accuracy !== null && (
+              <span style={{ marginRight: 12, color: mw.validation_accuracy >= 0.45 ? "#22c55e" : "#ef4444" }}>
+                Hold-out Acc: {(mw.validation_accuracy * 100).toFixed(1)}%
+              </span>
+            )}
+            {mw.regime_shift_detected && (
+              <span style={{ color: "#f59e0b", fontWeight: 700 }}>⚠️ Regime Shift Detected (Alpha Boost Active)</span>
+            )}
+          </div>
+          <div>
+            Last trained: {new Date(mw.last_updated).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST
+            · {mw.total_samples} total samples
+          </div>
         </div>
       )}
     </motion.div>
@@ -523,8 +537,8 @@ export default function LearnPage() {
             </motion.div>
           </div>
 
-          {/* ── Meta-Learner v2 Card (full width) ───────────────────────── */}
-          <MetaLearnerV2Card />
+          {/* 🧠 Meta-Learner v3 Card (full width) 🧠 */}
+          <MetaLearnerV3Card />
 
           {/* ── Row 4: Recent outcomes table ──────────────────────────── */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card p-6">
