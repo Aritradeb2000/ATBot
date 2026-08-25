@@ -268,6 +268,10 @@ class UserSettings(Base):
     meta_side_S = Column(Float, nullable=True)
     meta_side_n = Column(Integer, nullable=True)
 
+    # v3 metrics
+    meta_validation_accuracy    = Column(Float,   nullable=True)   # hold-out accuracy
+    meta_regime_shift_detected  = Column(Integer, nullable=True)   # bool stored as 0/1
+
 
 # -- Signal Outcomes --
 class SignalOutcome(Base):
