@@ -148,6 +148,7 @@ async def job_refresh_fii_dii():
     """
     Refresh FII/DII flow data.
     Runs daily at 6 PM IST (NSE publishes after market close).
+    Persists to fii_dii_flow DB table for historical tracking.
     """
     logger.info("🏦 [Scheduler] Refreshing FII/DII data...")
     try:
@@ -155,6 +156,43 @@ async def job_refresh_fii_dii():
         if data:
             _cache["fii_dii"] = data
             logger.info(f"✅ FII net: ₹{data.get('fii_net')} Cr | DII net: ₹{data.get('dii_net')} Cr")
+
+            # ── Persist to DB ────────────────────────────────────────────
+            from backend.models.database import AsyncSessionLocal
+            from backend.models.schemas import FIIDIIFlow
+            from sqlalchemy import select
+            from datetime import date as date_type, datetime as dt_type
+
+            raw_date = data.get("date") or ""
+            try:
+                # NSE format: '24-Aug-2026'
+                record_date = dt_type.strptime(raw_date, "%d-%b-%Y").date()
+            except ValueError:
+                record_date = date_type.today()
+
+            async with AsyncSessionLocal() as db:
+                # Skip if already saved for this date
+                existing = await db.execute(
+                    select(FIIDIIFlow).where(
+                        FIIDIIFlow.date == dt_type.combine(record_date, dt_type.min.time())
+                    )
+                )
+                if not existing.scalar_one_or_none():
+                    db.add(FIIDIIFlow(
+                        date     = dt_type.combine(record_date, dt_type.min.time()),
+                        fii_buy  = data.get("fii_buy"),
+                        fii_sell = data.get("fii_sell"),
+                        fii_net  = data.get("fii_net"),
+                        dii_buy  = data.get("dii_buy"),
+                        dii_sell = data.get("dii_sell"),
+                        dii_net  = data.get("dii_net"),
+                    ))
+                    await db.commit()
+                    logger.info(f"💾 FII/DII saved to DB for {record_date}")
+                else:
+                    logger.info(f"  FII/DII already in DB for {record_date} — skipped")
+
+
         _cache["last_updated"]["fii_dii"] = datetime.now(IST).isoformat()
     except Exception as e:
         logger.error(f"❌ FII/DII refresh failed: {e}")
