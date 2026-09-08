@@ -29,11 +29,12 @@ export default function MarketTicker() {
     <div
       style={{
         height: 40,
-        background: "#070b14",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        background: "var(--ticker-bg)",
+        borderBottom: "1px solid var(--ticker-border)",
         overflow: "hidden",
         display: "flex",
         alignItems: "center",
+        transition: "background-color 0.3s ease",
       }}
     >
       <div
@@ -48,13 +49,13 @@ export default function MarketTicker() {
               alignItems: "center",
               gap: 8,
               padding: "0 32px",
-              borderRight: "1px solid rgba(255,255,255,0.06)",
+              borderRight: "1px solid var(--ticker-border)",
             }}
           >
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.05em" }}>{item.label}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ticker-text)", letterSpacing: "0.05em" }}>{item.label}</span>
             {item.price != null ? (
               <>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#f1f5f9" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
                   {item.isVix ? item.price.toFixed(2) : `₹${item.price.toLocaleString("en-IN")}`}
                 </span>
                 {item.change !== 0 && (

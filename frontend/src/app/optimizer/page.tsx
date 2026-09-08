@@ -25,16 +25,16 @@ const signalColor = (s: string) => {
 function KpiCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <div style={{
-      background: "rgba(255,255,255,0.04)",
-      border: "1px solid rgba(255,255,255,0.08)",
+      background: "var(--hover-bg)",
+      border: "1px solid var(--border)",
       borderRadius: 12,
       padding: "16px 20px",
       flex: 1,
       minWidth: 140,
     }}>
-      <div style={{ fontSize: 10, color: "#475569", fontWeight: 700, letterSpacing: "0.08em", marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: color || "#f1f5f9" }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: "#64748b", marginTop: 3 }}>{sub}</div>}
+      <div style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 700, letterSpacing: "0.08em", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: color || "var(--text-primary)" }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 3 }}>{sub}</div>}
     </div>
   );
 }
@@ -84,8 +84,8 @@ function DonutChart({ allocations, remaining, total }: { allocations: OptimizerA
         {segments.map((seg, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 10, height: 10, borderRadius: "50%", background: seg.color, flexShrink: 0 }} />
-            <span style={{ fontSize: 11, color: "#94a3b8" }}>{seg.label}</span>
-            <span style={{ fontSize: 11, color: "#64748b", marginLeft: "auto" }}>
+            <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{seg.label}</span>
+            <span style={{ fontSize: 11, color: "var(--text-secondary)", marginLeft: "auto" }}>
               {((seg.value / total) * 100).toFixed(1)}%
             </span>
           </div>
@@ -109,8 +109,8 @@ function AllocationRow({ a, rank }: { a: OptimizerAllocation; rank: number }) {
     >
       <td style={td}>{rank}</td>
       <td style={td}>
-        <div style={{ fontWeight: 700, color: "#f1f5f9", fontSize: 13 }}>{a.symbol.replace(".NS", "")}</div>
-        <div style={{ fontSize: 10, color: "#475569", marginTop: 1 }}>{a.company_name}</div>
+        <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 13 }}>{a.symbol.replace(".NS", "")}</div>
+        <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>{a.company_name}</div>
       </td>
       <td style={{ ...td, textAlign: "center" }}>
         <span style={{ fontSize: 10, fontWeight: 700, color: signalColor(a.signal), background: signalColor(a.signal) + "18", padding: "3px 8px", borderRadius: 6, border: `1px solid ${signalColor(a.signal)}30` }}>
@@ -119,7 +119,7 @@ function AllocationRow({ a, rank }: { a: OptimizerAllocation; rank: number }) {
       </td>
       <td style={{ ...td, textAlign: "right" }}>{a.qty}</td>
       <td style={{ ...td, textAlign: "right" }}>{fmt(a.price)}</td>
-      <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#f1f5f9" }}>{fmt(a.invested)}</td>
+      <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "var(--text-primary)" }}>{fmt(a.invested)}</td>
       <td style={{ ...td, textAlign: "right", color: "#22c55e", fontWeight: 700 }}>
         {a.target_base ? fmt(a.target_base) : "—"}
         {a.gain_pct !== null && (
@@ -136,7 +136,7 @@ function AllocationRow({ a, rank }: { a: OptimizerAllocation; rank: number }) {
         </span>
       </td>
       <td style={{ ...td, textAlign: "right", color: "#818cf8" }}>{a.score}</td>
-      <td style={{ ...td, textAlign: "right", color: "#64748b" }}>{a.confidence}%</td>
+      <td style={{ ...td, textAlign: "right", color: "var(--text-secondary)" }}>{a.confidence}%</td>
     </motion.tr>
   );
 }
@@ -144,7 +144,7 @@ function AllocationRow({ a, rank }: { a: OptimizerAllocation; rank: number }) {
 const td: React.CSSProperties = {
   padding: "12px 14px",
   fontSize: 12,
-  color: "#94a3b8",
+  color: "var(--text-secondary)",
   borderBottom: "1px solid rgba(255,255,255,0.04)",
   verticalAlign: "middle",
 };
@@ -153,10 +153,10 @@ const th: React.CSSProperties = {
   padding: "10px 14px",
   fontSize: 10,
   fontWeight: 700,
-  color: "#475569",
+  color: "var(--text-muted)",
   letterSpacing: "0.08em",
   textAlign: "right" as const,
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  borderBottom: "1px solid var(--border)",
   background: "rgba(0,0,0,0.3)",
 };
 
@@ -191,7 +191,7 @@ function LoadingState() {
       >
         ⚙️
       </motion.div>
-      <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>
+      <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>
         Optimizing your portfolio…
       </div>
       <AnimatePresence mode="wait">
@@ -205,7 +205,7 @@ function LoadingState() {
           {LOADING_PHRASES[phraseIdx]}
         </motion.div>
       </AnimatePresence>
-      <div style={{ marginTop: 24, fontSize: 11, color: "#334155" }}>
+      <div style={{ marginTop: 24, fontSize: 11, color: "var(--text-muted)" }}>
         This takes 60–120 seconds for Nifty 50 (50 stocks in parallel)
       </div>
     </div>
@@ -267,8 +267,8 @@ export default function OptimizerPage() {
     <div style={{ maxWidth: 1200 }}>
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>Portfolio Optimizer</h1>
-        <p style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>Portfolio Optimizer</h1>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
           Input your capital → ATBot scans the market and returns an optimal allocation plan
         </p>
       </motion.div>
@@ -283,11 +283,11 @@ export default function OptimizerPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 28, alignItems: "start" }}>
           {/* Capital input */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
               INVESTMENT AMOUNT (₹)
             </label>
             <div style={{ position: "relative" }}>
-              <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#64748b", fontSize: 16, fontWeight: 700 }}>₹</span>
+              <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)", fontSize: 16, fontWeight: 700 }}>₹</span>
               <input
                 id="optimizer-amount"
                 type="number"
@@ -298,7 +298,7 @@ export default function OptimizerPage() {
                 style={{
                   width: "100%", padding: "12px 14px 12px 32px", boxSizing: "border-box",
                   borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)",
-                  background: "rgba(255,255,255,0.05)", color: "#f1f5f9", fontSize: 16, fontWeight: 700, outline: "none",
+                  background: "rgba(255,255,255,0.05)", color: "var(--text-primary)", fontSize: 16, fontWeight: 700, outline: "none",
                 }}
               />
             </div>
@@ -314,7 +314,7 @@ export default function OptimizerPage() {
 
           {/* Universe + Max stocks */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
               STOCK UNIVERSE
             </label>
             <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -325,19 +325,19 @@ export default function OptimizerPage() {
                 </button>
               ))}
             </div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
               MAX STOCKS: {maxStocks}
             </label>
             <input type="range" min={2} max={10} value={maxStocks} onChange={e => setMaxStocks(Number(e.target.value))}
               style={{ width: "100%", accentColor: "#6366f1" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#334155" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-muted)" }}>
               <span>2</span><span>10</span>
             </div>
           </div>
 
           {/* Risk Profile */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", display: "block", marginBottom: 8 }}>
               RISK PROFILE
             </label>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -393,13 +393,13 @@ export default function OptimizerPage() {
             {result.status === "insufficient_signals" ? (
               <div className="glass-card" style={{ padding: "48px 32px", textAlign: "center" }}>
                 <div style={{ fontSize: 40, marginBottom: 16 }}>🔍</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>
                   Not Enough Strong Signals
                 </div>
-                <div style={{ fontSize: 13, color: "#64748b", maxWidth: 420, margin: "0 auto" }}>
+                <div style={{ fontSize: 13, color: "var(--text-secondary)", maxWidth: 420, margin: "0 auto" }}>
                   {result.message || "Try switching to Aggressive profile or broadening your universe."}
                 </div>
-                <div style={{ marginTop: 12, fontSize: 11, color: "#334155" }}>
+                <div style={{ marginTop: 12, fontSize: 11, color: "var(--text-muted)" }}>
                   Scanned {result.scanned} stocks · {result.qualified} qualified
                 </div>
               </div>
@@ -417,15 +417,15 @@ export default function OptimizerPage() {
                 {/* Donut + Table */}
                 <div className="glass-card" style={{ padding: "24px 0", marginBottom: 20 }}>
                   {/* Chart + Stats row */}
-                  <div style={{ display: "flex", gap: 32, alignItems: "center", padding: "0 28px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div style={{ display: "flex", gap: 32, alignItems: "center", padding: "0 28px 20px", borderBottom: "1px solid var(--border)" }}>
                     <DonutChart allocations={result.allocations} remaining={result.remaining_cash} total={result.total_investment} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 11, color: "#475569", fontWeight: 700, letterSpacing: "0.08em", marginBottom: 10 }}>SCAN SUMMARY</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, letterSpacing: "0.08em", marginBottom: 10 }}>SCAN SUMMARY</div>
                       <div style={{ display: "flex", gap: 20 }}>
-                        <div><div style={{ fontSize: 22, fontWeight: 800, color: "#f1f5f9" }}>{result.scanned}</div><div style={{ fontSize: 10, color: "#475569" }}>Stocks Scanned</div></div>
-                        <div><div style={{ fontSize: 22, fontWeight: 800, color: "#6366f1" }}>{result.qualified}</div><div style={{ fontSize: 10, color: "#475569" }}>Qualified</div></div>
-                        <div><div style={{ fontSize: 22, fontWeight: 800, color: "#22c55e" }}>{result.allocations.length}</div><div style={{ fontSize: 10, color: "#475569" }}>Allocated</div></div>
-                        <div><div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9", textTransform: "capitalize" }}>{result.risk_profile}</div><div style={{ fontSize: 10, color: "#475569" }}>Risk Profile</div></div>
+                        <div><div style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)" }}>{result.scanned}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>Stocks Scanned</div></div>
+                        <div><div style={{ fontSize: 22, fontWeight: 800, color: "#6366f1" }}>{result.qualified}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>Qualified</div></div>
+                        <div><div style={{ fontSize: 22, fontWeight: 800, color: "#22c55e" }}>{result.allocations.length}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>Allocated</div></div>
+                        <div><div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", textTransform: "capitalize" }}>{result.risk_profile}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>Risk Profile</div></div>
                       </div>
                     </div>
                     <button

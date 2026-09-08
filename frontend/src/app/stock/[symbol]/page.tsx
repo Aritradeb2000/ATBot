@@ -276,7 +276,7 @@ export default function StockDetailPage({ params }: Props) {
               ))}
             </div>
             {activeTab === "signals" && (
-              <ul style={{ listStyle: "none", padding: 0, margin: 0, space: 4 }}>
+              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                 {details.technical.signals.map((s, i) => (
                   <li key={i} style={{ fontSize: 11, color: "#94a3b8", padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                     {s.startsWith("Error") ? `⚠ ${s}` : `• ${s}`}
@@ -297,7 +297,7 @@ export default function StockDetailPage({ params }: Props) {
               </ul>
             )}
             {activeTab === "sentiment" && (
-              <div style={{ space: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {details.sentiment.flags.map((f, i) => (
                   <div key={i} style={{ fontSize: 11, color: "#94a3b8", padding: "3px 0" }}>• {f}</div>
                 ))}

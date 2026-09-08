@@ -128,8 +128,8 @@ export default function ScreenerPage() {
     <div style={{ maxWidth: 1300 }}>
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 16 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>Screener</h1>
-        <p style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>Screener</h1>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
           Filter and rank NSE stocks by AI composite score · {universeLabel}
         </p>
       </motion.div>
@@ -152,7 +152,7 @@ export default function ScreenerPage() {
                 {nightlyStatus.duration_s && <> · {nightlyStatus.duration_s}s</>}
               </span>
             )}
-            {nightlyStatus.status === "idle" && <span style={{ color: "#475569" }}>🌙 Nightly scan runs at 4:00 PM IST weekdays</span>}
+            {nightlyStatus.status === "idle" && <span style={{ color: "var(--text-muted)" }}>🌙 Nightly scan runs at 4:00 PM IST weekdays</span>}
             {nightlyStatus.status === "failed" && <span style={{ color: "#ef4444" }}>⚠️ Last nightly scan failed — showing cached data</span>}
           </div>
           {meta?.data_source && (
@@ -192,13 +192,13 @@ export default function ScreenerPage() {
       <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 20 }}>
         {/* ── Filters panel ─────────────────────────────────────────── */}
         <div className="glass-card p-5 h-fit" style={{ position: "sticky", top: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", marginBottom: 16 }}>
             FILTERS
           </div>
 
           {/* Universe */}
           <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>UNIVERSE</label>
+            <label style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>UNIVERSE</label>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
               {([
                 { id: "nifty50"  as const, label: "Nifty 50",  sub: "50 stocks · instant" },
@@ -221,7 +221,7 @@ export default function ScreenerPage() {
 
           {/* Signal */}
           <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>SIGNAL TYPE</label>
+            <label style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>SIGNAL TYPE</label>
             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 8 }}>
               {SIGNAL_OPTIONS.map((s) => (
                 <FilterPill key={s} active={signal === s} onClick={() => setSignal(s)}>{s}</FilterPill>
@@ -231,7 +231,7 @@ export default function ScreenerPage() {
 
           {/* Min Score */}
           <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>
+            <label style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
               MIN SCORE: <span style={{ color: "#60a5fa" }}>{minScore}</span>
             </label>
             <input
@@ -243,7 +243,7 @@ export default function ScreenerPage() {
 
           {/* RSI Range */}
           <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>
+            <label style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
               RSI RANGE: <span style={{ color: "#60a5fa" }}>{minRsi}–{maxRsi}</span>
             </label>
             <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
@@ -253,7 +253,7 @@ export default function ScreenerPage() {
               ].map(({ label, val, set }) => (
                 <input key={label} type="number" value={val} min={0} max={100}
                   onChange={(e) => set(+e.target.value)}
-                  style={{ width: "100%", padding: "6px 8px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#f1f5f9", fontSize: 12, outline: "none" }}
+                  style={{ width: "100%", padding: "6px 8px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-primary)", fontSize: 12, outline: "none" }}
                 />
               ))}
             </div>
@@ -261,11 +261,11 @@ export default function ScreenerPage() {
 
           {/* Sort */}
           <div style={{ marginBottom: 24 }}>
-            <label style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>SORT BY</label>
+            <label style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>SORT BY</label>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortBy)}
-              style={{ width: "100%", marginTop: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#f1f5f9", fontSize: 12, outline: "none" }}
+              style={{ width: "100%", marginTop: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-primary)", fontSize: 12, outline: "none" }}
             >
               <option value="score">Composite Score ↓</option>
               <option value="rsi">RSI Low → High</option>
@@ -303,7 +303,7 @@ export default function ScreenerPage() {
                 onChange={(e) => setForceLive(e.target.checked)} 
                 style={{ accentColor: "#3b82f6", cursor: "pointer" }} 
               />
-              <label htmlFor="forceLive" style={{ fontSize: 11, color: "#94a3b8", cursor: "pointer" }}>
+              <label htmlFor="forceLive" style={{ fontSize: 11, color: "var(--text-secondary)", cursor: "pointer" }}>
                 Force Live Scan <span style={{ color: "#ef4444" }}>(Slow: 2–8 mins)</span>
               </label>
             </div>
@@ -314,7 +314,7 @@ export default function ScreenerPage() {
         <div>
           {/* Results header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <span style={{ fontSize: 13, color: "#475569" }}>
+            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
               {loading
                 ? `⏳ ${universe === "nifty200" ? "Loading 200 stocks" : universe === "nifty50" ? "Loading 50 stocks" : "Scanning watchlist"}…`
                 : meta
@@ -322,7 +322,7 @@ export default function ScreenerPage() {
                   : "Loading pre-computed data…"}
             </span>
             {meta?.last_computed && (
-              <span style={{ fontSize: 10, color: "#334155" }}>
+              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
                 Computed: {new Date(meta.last_computed).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })} IST
               </span>
             )}
@@ -348,8 +348,8 @@ export default function ScreenerPage() {
           {!loading && !error && hasScanned && results.length === 0 && (
             <div className="glass-card p-8" style={{ textAlign: "center" }}>
               <div style={{ fontSize: 32, marginBottom: 10 }}>🔍</div>
-              <p style={{ color: "#64748b", fontSize: 13 }}>No stocks match your current filters.</p>
-              <p style={{ color: "#334155", fontSize: 12, marginTop: 6 }}>Try relaxing the filters or choosing a different preset.</p>
+              <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>No stocks match your current filters.</p>
+              <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 6 }}>Try relaxing the filters or choosing a different preset.</p>
             </div>
           )}
 
@@ -357,8 +357,8 @@ export default function ScreenerPage() {
           {!loading && !error && !hasScanned && universe === "watchlist" && (
             <div className="glass-card p-10" style={{ textAlign: "center" }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>📡</div>
-              <p style={{ color: "#64748b", fontSize: 14, fontWeight: 600 }}>Set your filters and click Run Scan</p>
-              <p style={{ color: "#334155", fontSize: 12, marginTop: 6 }}>
+              <p style={{ color: "var(--text-secondary)", fontSize: 14, fontWeight: 600 }}>Set your filters and click Run Scan</p>
+              <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 6 }}>
                 Watchlist scan runs live and takes ~10–20 seconds.
               </p>
             </div>
@@ -375,7 +375,7 @@ export default function ScreenerPage() {
                   gap: 8, padding: "8px 16px", marginBottom: 4,
                 }}>
                   {["SYMBOL","COMPANY","PRICE","CHANGE","SCORE","T","F","S","SIGNAL","RSI"].map((h) => (
-                    <div key={h} style={{ fontSize: 10, fontWeight: 700, color: "#334155", letterSpacing: "0.07em" }}>{h}</div>
+                    <div key={h} style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.07em" }}>{h}</div>
                   ))}
                 </div>
 
@@ -404,15 +404,15 @@ export default function ScreenerPage() {
                           >
                             {/* Symbol */}
                             <div>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>{ticker}</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{ticker}</div>
                               <Chip color={regimeColor(r.regime)}>{r.regime}</Chip>
                             </div>
 
                             {/* Company */}
-                            <div style={{ fontSize: 11, color: "#64748b" }} className="truncate">{r.company_name}</div>
+                            <div style={{ fontSize: 11, color: "var(--text-secondary)" }} className="truncate">{r.company_name}</div>
 
                             {/* Price */}
-                            <div style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
                               {r.price != null ? `₹${r.price.toLocaleString("en-IN", { maximumFractionDigits: 2 })}` : "—"}
                             </div>
 

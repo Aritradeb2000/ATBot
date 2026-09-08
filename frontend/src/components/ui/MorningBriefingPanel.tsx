@@ -63,20 +63,20 @@ export default function MorningBriefingPanel() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 20 }}>🌅</span>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
               Morning Briefing
               {hasData && (
-                <span style={{ marginLeft: 8, fontSize: 10, color: "#64748b", fontWeight: 400 }}>
+                <span style={{ marginLeft: 8, fontSize: 10, color: "var(--text-secondary)", fontWeight: 400 }}>
                   Generated at {formatTime(briefing.generated_at)}
                 </span>
               )}
             </div>
             {hasData && briefing.market_comment ? (
-              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, maxWidth: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2, maxWidth: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {briefing.market_comment}
               </div>
             ) : (
-              <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
                 {isLoading ? "Loading…" : "Not generated yet — click Generate below"}
               </div>
             )}
@@ -96,7 +96,7 @@ export default function MorningBriefingPanel() {
             {triggering ? "Generating…" : "⚡ Generate"}
           </button>
           {hasData && (
-            <span style={{ fontSize: 18, color: "#475569", userSelect: "none" }}>
+            <span style={{ fontSize: 18, color: "var(--text-muted)", userSelect: "none" }}>
               {open ? "▲" : "▼"}
             </span>
           )}
@@ -126,7 +126,7 @@ export default function MorningBriefingPanel() {
 
               {/* Column 1: Market Snapshot */}
               <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", letterSpacing: "0.08em", marginBottom: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", marginBottom: 12 }}>
                   MARKET SNAPSHOT
                 </div>
 
@@ -167,16 +167,16 @@ export default function MorningBriefingPanel() {
 
               {/* Column 2: Global Cues */}
               <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", letterSpacing: "0.08em", marginBottom: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", marginBottom: 12 }}>
                   GLOBAL CUES
                 </div>
                 {briefing.global_cues && Object.keys(briefing.global_cues).length > 0 ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {Object.entries(briefing.global_cues).slice(0, 6).map(([name, cue]) => (
                       <div key={name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)" }}>
-                        <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>{name}</span>
+                        <span style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600 }}>{name}</span>
                         <div style={{ textAlign: "right" }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: "#f1f5f9" }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
                             {cue.price?.toLocaleString("en-US", { maximumFractionDigits: 2 })}
                           </div>
                           <div style={{ fontSize: 10, fontWeight: 700, color: (cue.change_pct ?? 0) >= 0 ? "#22c55e" : "#ef4444" }}>
@@ -187,7 +187,7 @@ export default function MorningBriefingPanel() {
                     ))}
                   </div>
                 ) : (
-                  <div style={{ fontSize: 12, color: "#334155" }}>Global cues not available</div>
+                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Global cues not available</div>
                 )}
 
                 {/* Earnings today */}
@@ -207,7 +207,7 @@ export default function MorningBriefingPanel() {
 
               {/* Column 3: Top Signals */}
               <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", letterSpacing: "0.08em", marginBottom: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", marginBottom: 12 }}>
                   TOP SIGNALS (LAST 24H)
                 </div>
                 {briefing.top_signals && briefing.top_signals.length > 0 ? (
@@ -219,23 +219,23 @@ export default function MorningBriefingPanel() {
                           style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)", cursor: "pointer" }}
                         >
                           <div>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: "#f1f5f9" }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
                               {s.symbol.replace(".NS", "")}
                             </div>
-                            <div style={{ fontSize: 10, color: "#475569" }}>Score: {s.score}</div>
+                            <div style={{ fontSize: 10, color: "var(--text-muted)" }}>Score: {s.score}</div>
                           </div>
                           <div style={{ textAlign: "right" }}>
                             <div style={{ fontSize: 10, fontWeight: 700, color: signalColor(s.signal), background: signalColor(s.signal) + "18", padding: "2px 8px", borderRadius: 6, border: `1px solid ${signalColor(s.signal)}30` }}>
                               {s.signal}
                             </div>
-                            <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>{s.confidence}% conf.</div>
+                            <div style={{ fontSize: 10, color: "var(--text-secondary)", marginTop: 2 }}>{s.confidence}% conf.</div>
                           </div>
                         </motion.div>
                       </a>
                     ))}
                   </div>
                 ) : (
-                  <div style={{ fontSize: 12, color: "#334155" }}>
+                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
                     No strong signals recorded in the last 24 hours.<br />
                     Analyze some stocks first!
                   </div>
@@ -252,10 +252,10 @@ export default function MorningBriefingPanel() {
 function IndexRow({ label, data }: { label: string; data: { price: number; change_pct: number } }) {
   const isUp = data.change_pct >= 0;
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", borderRadius: 8, background: "rgba(255,255,255,0.04)" }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8" }}>{label}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", borderRadius: 8, background: "var(--hover-bg)" }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)" }}>{label}</span>
       <div style={{ textAlign: "right" }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: "#f1f5f9" }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)" }}>
           {data.price?.toLocaleString("en-IN")}
         </div>
         <div style={{ fontSize: 10, fontWeight: 700, color: isUp ? "#22c55e" : "#ef4444" }}>
@@ -269,8 +269,8 @@ function IndexRow({ label, data }: { label: string; data: { price: number; chang
 function FiiDiiPill({ label, value }: { label: string; value: number }) {
   const isPos = value >= 0;
   return (
-    <div style={{ flex: 1, padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", textAlign: "center" }}>
-      <div style={{ fontSize: 9, color: "#475569", fontWeight: 600 }}>{label}</div>
+    <div style={{ flex: 1, padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)", textAlign: "center" }}>
+      <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 600 }}>{label}</div>
       <div style={{ fontSize: 11, fontWeight: 700, color: isPos ? "#22c55e" : "#ef4444", marginTop: 2 }}>
         {isPos ? "+" : ""}₹{Math.abs(value).toLocaleString("en-IN")} Cr
       </div>

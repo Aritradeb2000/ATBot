@@ -41,8 +41,8 @@ function MetaLearnerV3Card() {
       className="glass-card p-6" style={{ gridColumn: "1 / -1" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em" }}>META-LEARNER v3 — ADAPTIVE WEIGHTS</div>
-          <div style={{ fontSize: 11, color: "#334155", marginTop: 4 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em" }}>META-LEARNER v3 — ADAPTIVE WEIGHTS</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
             Regime-conditioned weights · EWMA λ={mw?.ewma.lambda ?? 0.92} (half-life {mw?.ewma.half_life_days ?? 8}d) · Confidence-weighted
           </div>
         </div>
@@ -56,8 +56,8 @@ function MetaLearnerV3Card() {
             </span>
           )}
           <span style={{ fontSize: 10, color: mw?.status === "active" ? "#22c55e" : "#475569",
-            padding: "3px 8px", borderRadius: 4, background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.08)" }}>
+            padding: "3px 8px", borderRadius: 4, background: "var(--hover-bg)",
+            border: "1px solid var(--border)" }}>
             {mw?.status === "active" ? "● ACTIVE" : "○ TRAINING"}
           </span>
         </div>
@@ -75,10 +75,10 @@ function MetaLearnerV3Card() {
               const ci = ["T", "F", "S"].indexOf(k);
               return (
                 <div key={k} style={{ flex: 1 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94a3b8", marginBottom: 3 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-secondary)", marginBottom: 3 }}>
                     <span>{labels[k]}</span><span style={{ fontWeight: 700, color: cols[ci] }}>{pct}%</span>
                   </div>
-                  <div style={{ height: 4, borderRadius: 99, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                  <div style={{ height: 4, borderRadius: 99, background: "var(--hover-bg)", overflow: "hidden" }}>
                     <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.7 }}
                       style={{ height: "100%", background: cols[ci], borderRadius: 99 }} />
                   </div>
@@ -116,7 +116,7 @@ function MetaLearnerV3Card() {
               </div>
 
               {/* Sample progress bar */}
-              <div style={{ height: 3, borderRadius: 99, background: "rgba(255,255,255,0.06)", overflow: "hidden", marginBottom: 12 }}>
+              <div style={{ height: 3, borderRadius: 99, background: "var(--hover-bg)", overflow: "hidden", marginBottom: 12 }}>
                 <motion.div initial={{ width: 0 }}
                   animate={{ width: `${Math.min(100, (samples / Math.max(minN, 1)) * 100)}%` }}
                   transition={{ duration: 0.8 }}
@@ -131,11 +131,11 @@ function MetaLearnerV3Card() {
                 const ci = ["T", "F", "S"].indexOf(k);
                 return (
                   <div key={k} style={{ marginBottom: 6 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#64748b", marginBottom: 2 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-secondary)", marginBottom: 2 }}>
                       <span>{labels[k]}</span>
                       <span style={{ fontWeight: 700, color: pct > 40 ? bCols[ci] : "#64748b" }}>{pct}%</span>
                     </div>
-                    <div style={{ height: 5, borderRadius: 99, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                    <div style={{ height: 5, borderRadius: 99, background: "var(--hover-bg)", overflow: "hidden" }}>
                       <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.6, delay: 0.1 * ci }}
                         style={{ height: "100%", background: bCols[ci], opacity: isActive ? 1 : 0.5, borderRadius: 99 }} />
                     </div>
@@ -148,10 +148,10 @@ function MetaLearnerV3Card() {
       </div>
 
       {mw?.message && (
-        <div style={{ marginTop: 12, fontSize: 11, color: "#475569", textAlign: "center" }}>{mw.message}</div>
+        <div style={{ marginTop: 12, fontSize: 11, color: "var(--text-muted)", textAlign: "center" }}>{mw.message}</div>
       )}
       {mw?.last_updated && (
-        <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", fontSize: 10, color: "#334155" }}>
+        <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-muted)" }}>
           <div>
             {mw.validation_accuracy !== null && (
               <span style={{ marginRight: 12, color: mw.validation_accuracy >= 0.45 ? "#22c55e" : "#ef4444" }}>
@@ -192,9 +192,9 @@ const pnlColor = (p: number) => (p > 0 ? "#22c55e" : p < 0 ? "#ef4444" : "#f59e0
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <div className="glass-card p-5">
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#475569", letterSpacing: "0.08em", marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 32, fontWeight: 800, color: color ?? "#f1f5f9", lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>{sub}</div>}
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 32, fontWeight: 800, color: color ?? "var(--text-primary)", lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 6 }}>{sub}</div>}
     </div>
   );
 }
@@ -203,11 +203,11 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
 function WinRateBar({ rate, wins, total }: { rate: number; wins: number; total: number }) {
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#64748b", marginBottom: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
         <span>{wins} wins / {total} resolved</span>
         <span style={{ fontWeight: 700, color: rate >= 60 ? "#22c55e" : rate >= 45 ? "#f59e0b" : "#ef4444" }}>{rate}%</span>
       </div>
-      <div style={{ height: 6, borderRadius: 99, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+      <div style={{ height: 6, borderRadius: 99, background: "var(--hover-bg)", overflow: "hidden" }}>
         <motion.div initial={{ width: 0 }} animate={{ width: `${rate}%` }} transition={{ duration: 0.8, ease: "easeOut" }}
           style={{ height: "100%", background: rate >= 60 ? "#22c55e" : rate >= 45 ? "#f59e0b" : "#ef4444", borderRadius: 99 }} />
       </div>
@@ -254,13 +254,13 @@ function NoDataState({ onTrigger, triggering }: { onTrigger: () => void; trigger
   return (
     <div className="glass-card p-10" style={{ textAlign: "center", maxWidth: 600, margin: "60px auto" }}>
       <div style={{ fontSize: 52, marginBottom: 16 }}>📡</div>
-      <div style={{ fontSize: 18, fontWeight: 800, color: "#f1f5f9", marginBottom: 10 }}>Learning in Progress</div>
-      <p style={{ fontSize: 13, color: "#64748b", lineHeight: 1.7, marginBottom: 20 }}>
-        ATBot hasn't tracked enough signal outcomes yet.<br />
+      <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", marginBottom: 10 }}>Learning in Progress</div>
+      <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.7, marginBottom: 20 }}>
+        ATBot hasn&apos;t tracked enough signal outcomes yet.<br />
         The outcome checker runs daily at <strong style={{ color: "#60a5fa" }}>6:30 PM IST</strong> and records
         how each signal performed at Day 5 and Day 10.
       </p>
-      <p style={{ fontSize: 12, color: "#475569", marginBottom: 24 }}>
+      <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 24 }}>
         Start using ATBot to analyze stocks — outcome data will appear here automatically.
       </p>
       <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
@@ -271,7 +271,7 @@ function NoDataState({ onTrigger, triggering }: { onTrigger: () => void; trigger
           {triggering ? "Running check…" : "▶ Run Outcome Check Now"}
         </button>
       </div>
-      <div style={{ marginTop: 16, fontSize: 11, color: "#334155" }}>
+      <div style={{ marginTop: 16, fontSize: 11, color: "var(--text-muted)" }}>
         (This button checks signals from 1, 2, 5, or 10 trading days ago — weekends skipped automatically for BTST/D2)
       </div>
     </div>
@@ -343,8 +343,8 @@ export default function LearnPage() {
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <h1 style={{ fontSize: 24, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>ATBot Learn</h1>
-            <p style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
+            <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>ATBot Learn</h1>
+            <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
               Win rate, accuracy trends, and signal outcome tracking
             </p>
           </div>
@@ -374,7 +374,7 @@ export default function LearnPage() {
             </div>
             <select value={lookback} onChange={e => setLookback(+e.target.value)} style={{
               padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.1)", color: "#f1f5f9", fontSize: 12, outline: "none",
+              border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-primary)", fontSize: 12, outline: "none",
             }}>
               <option value={30}>Last 30 days</option>
               <option value={90}>Last 90 days</option>
@@ -439,7 +439,7 @@ export default function LearnPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: 16, marginBottom: 20 }}>
             {/* By signal */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-card p-6">
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 16 }}>WIN RATE BY SIGNAL TYPE</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", marginBottom: 16 }}>WIN RATE BY SIGNAL TYPE</div>
               {SIGNAL_ORDER.map(sig => {
                 const data = stats.by_signal[sig] ?? stats.by_signal[sig.replace(" ", "_")];
                 if (!data || data.total === 0) return null;
@@ -459,13 +459,13 @@ export default function LearnPage() {
 
             {/* Monthly chart */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass-card p-6">
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", marginBottom: 16 }}>
                 MONTHLY WIN RATE TREND
               </div>
               {stats.monthly_trend.length > 0 ? (
                 <MonthlyChart data={stats.monthly_trend} />
               ) : (
-                <div style={{ color: "#475569", fontSize: 12, textAlign: "center", paddingTop: 40 }}>Not enough data for monthly trend yet</div>
+                <div style={{ color: "var(--text-muted)", fontSize: 12, textAlign: "center", paddingTop: 40 }}>Not enough data for monthly trend yet</div>
               )}
             </motion.div>
           </div>
@@ -474,10 +474,10 @@ export default function LearnPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
             {/* Component correlation */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card p-6">
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", marginBottom: 16 }}>
                 ENGINE SCORE: WINS vs LOSSES
               </div>
-              <div style={{ fontSize: 11, color: "#334155", marginBottom: 14 }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 14 }}>
                 Average engine scores for winning vs losing signals — higher delta = engine was more predictive
               </div>
               {(["composite", "technical", "fundamental", "sentiment"] as const).map(key => {
@@ -487,20 +487,20 @@ export default function LearnPage() {
                 return (
                   <div key={key} style={{ marginBottom: 14 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 5 }}>
-                      <span style={{ fontWeight: 700, color: "#f1f5f9", textTransform: "capitalize" }}>{key}</span>
+                      <span style={{ fontWeight: 700, color: "var(--text-primary)", textTransform: "capitalize" }}>{key}</span>
                       <span style={{ color: delta > 0 ? "#22c55e" : "#ef4444", fontWeight: 700 }}>
                         Δ {delta > 0 ? "+" : ""}{delta.toFixed(1)}
                       </span>
                     </div>
                     <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                       <span style={{ fontSize: 10, color: "#22c55e", width: 50 }}>WIN {d.wins_avg}</span>
-                      <div style={{ flex: 1, height: 5, borderRadius: 99, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                      <div style={{ flex: 1, height: 5, borderRadius: 99, background: "var(--hover-bg)", overflow: "hidden" }}>
                         <div style={{ width: `${d.wins_avg}%`, height: "100%", background: "#22c55e", opacity: 0.7, borderRadius: 99 }} />
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 3 }}>
                       <span style={{ fontSize: 10, color: "#ef4444", width: 50 }}>LOSS {d.losses_avg}</span>
-                      <div style={{ flex: 1, height: 5, borderRadius: 99, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                      <div style={{ flex: 1, height: 5, borderRadius: 99, background: "var(--hover-bg)", overflow: "hidden" }}>
                         <div style={{ width: `${d.losses_avg}%`, height: "100%", background: "#ef4444", opacity: 0.7, borderRadius: 99 }} />
                       </div>
                     </div>
@@ -511,13 +511,13 @@ export default function LearnPage() {
 
             {/* Top / worst stocks */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="glass-card p-6">
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", marginBottom: 16 }}>
                 BEST & WORST PERFORMING STOCKS
               </div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#22c55e", marginBottom: 8 }}>🏆 Most Accurate</div>
               {stats.top_stocks.map(s => (
                 <div key={s.symbol} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>{s.symbol.replace(".NS", "")}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>{s.symbol.replace(".NS", "")}</span>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#22c55e" }}>{s.win_rate}% win rate</div>
                     <div style={{ fontSize: 10, color: pnlColor(s.avg_pnl) }}>{s.avg_pnl > 0 ? "+" : ""}{s.avg_pnl}% avg</div>
@@ -527,7 +527,7 @@ export default function LearnPage() {
               <div style={{ fontSize: 11, fontWeight: 700, color: "#ef4444", margin: "14px 0 8px" }}>⚠ Needs Attention</div>
               {stats.worst_stocks.map(s => (
                 <div key={s.symbol} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>{s.symbol.replace(".NS", "")}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>{s.symbol.replace(".NS", "")}</span>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#ef4444" }}>{s.win_rate}% win rate</div>
                     <div style={{ fontSize: 10, color: pnlColor(s.avg_pnl) }}>{s.avg_pnl > 0 ? "+" : ""}{s.avg_pnl}% avg</div>
@@ -542,32 +542,32 @@ export default function LearnPage() {
 
           {/* ── Row 4: Recent outcomes table ──────────────────────────── */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card p-6">
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", marginBottom: 16 }}>
               RECENT SIGNAL OUTCOMES
             </div>
 
             {recentLoading ? (
               [...Array(5)].map((_, i) => <div key={i} className="shimmer mb-2" style={{ height: 44, borderRadius: 8 }} />)
             ) : recent.length === 0 ? (
-              <div style={{ color: "#475569", fontSize: 12, textAlign: "center", padding: 24 }}>No resolved outcomes yet</div>
+              <div style={{ color: "var(--text-muted)", fontSize: 12, textAlign: "center", padding: 24 }}>No resolved outcomes yet</div>
             ) : (
               <>
                 {/* Table header */}
                 <div style={{ display: "grid", gridTemplateColumns: "100px 1fr 80px 70px 80px 80px 80px 100px", gap: 8, padding: "6px 10px", marginBottom: 6 }}>
                   {["SYMBOL", "SIGNAL", "ENTRY", "DAY", "ENTRY ₹", "PRICE ₹", "P&L %", "OUTCOME"].map(h => (
-                    <div key={h} style={{ fontSize: 9, fontWeight: 700, color: "#334155", letterSpacing: "0.07em" }}>{h}</div>
+                    <div key={h} style={{ fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.07em" }}>{h}</div>
                   ))}
                 </div>
 
                 {recent.map((r, i) => (
                   <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
                     style={{ display: "grid", gridTemplateColumns: "100px 1fr 80px 70px 80px 80px 80px 100px", gap: 8, padding: "10px 10px", borderRadius: 8, marginBottom: 4, background: "rgba(255,255,255,0.03)", alignItems: "center" }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>{r.symbol.replace(".NS", "")}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>{r.symbol.replace(".NS", "")}</div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: signalColor(r.signal) }}>{r.signal}</div>
-                    <div style={{ fontSize: 11, color: "#64748b" }}>{r.entry_date}</div>
-                    <div style={{ fontSize: 11, color: "#475569" }}>D{r.check_day}</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8" }}>₹{r.entry_price?.toLocaleString("en-IN", { maximumFractionDigits: 1 })}</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8" }}>₹{r.price_at_check?.toLocaleString("en-IN", { maximumFractionDigits: 1 })}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{r.entry_date}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>D{r.check_day}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>₹{r.entry_price?.toLocaleString("en-IN", { maximumFractionDigits: 1 })}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>₹{r.price_at_check?.toLocaleString("en-IN", { maximumFractionDigits: 1 })}</div>
                     {/* Bug2: For SELL signals, raw pnl_percent is negative when price fell (=WIN for SELL)
                         Show adjusted display: invert sign for SELLs, add directional label */}
                     {(() => {
@@ -577,7 +577,7 @@ export default function LearnPage() {
                       return (
                         <div style={{ fontSize: 12, fontWeight: 700, color: displayColor }}>
                           {displayPnl > 0 ? "+" : ""}{displayPnl.toFixed(2)}%
-                          {isSell && <span style={{ fontSize: 9, color: "#64748b", marginLeft: 3 }}>(SELL)</span>}
+                          {isSell && <span style={{ fontSize: 9, color: "var(--text-secondary)", marginLeft: 3 }}>(SELL)</span>}
                         </div>
                       );
                     })()}

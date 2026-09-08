@@ -17,8 +17,8 @@ function SectionHeader({ icon, title, subtitle }: { icon: string; title: string;
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
       <div style={{ fontSize: 26, lineHeight: 1 }}>{icon}</div>
       <div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9" }}>{title}</div>
-        <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{subtitle}</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{title}</div>
+        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>{subtitle}</div>
       </div>
     </div>
   );
@@ -160,14 +160,14 @@ export default function SettingsPage() {
 
   const inputStyle: React.CSSProperties = {
     padding: "9px 12px", borderRadius: 8, background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.1)", color: "#f1f5f9", fontSize: 13, outline: "none",
+    border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-primary)", fontSize: 13, outline: "none",
   };
 
   return (
     <div style={{ maxWidth: 720 }}>
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>Settings</h1>
-        <p style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>Settings</h1>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
           Your trading profile · Persisted to both browser and database
         </p>
       </motion.div>
@@ -194,7 +194,7 @@ export default function SettingsPage() {
         {/* Manual input */}
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
           <div style={{ position: "relative", flex: 1 }}>
-            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#64748b", fontSize: 16, fontWeight: 700 }}>₹</span>
+            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)", fontSize: 16, fontWeight: 700 }}>₹</span>
             <input type="number" value={capital} onChange={e => setCapital(+e.target.value)}
               placeholder="Custom amount…"
               style={{ ...inputStyle, width: "100%", paddingLeft: 30, fontSize: 15, fontWeight: 700 }} />
@@ -229,7 +229,7 @@ export default function SettingsPage() {
               <div style={{ fontSize: 22 }}>{p.icon}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: riskProfile === p.id ? "#60a5fa" : "#f1f5f9" }}>{p.label}</div>
-                <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{p.desc}</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{p.desc}</div>
               </div>
               <div style={{
                 width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
@@ -254,8 +254,8 @@ export default function SettingsPage() {
         ].map(({ id, label, desc, val, set }) => (
           <div key={id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9" }}>{label}</div>
-              <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>{desc}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{label}</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{desc}</div>
             </div>
             <Toggle id={id} checked={val} onChange={set} />
           </div>
@@ -264,21 +264,21 @@ export default function SettingsPage() {
         {/* Threshold inputs */}
         <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 6 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
               VIX ALERT THRESHOLD
             </label>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input type="number" value={vixThreshold} onChange={e => setVixThreshold(+e.target.value)} min={10} max={40} style={{ ...inputStyle, width: "100%" }} />
-              <span style={{ fontSize: 11, color: "#475569", whiteSpace: "nowrap" }}>Alert if VIX ≥</span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>Alert if VIX ≥</span>
             </div>
           </div>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 6 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
               FII FLOW THRESHOLD (₹ Cr)
             </label>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input type="number" value={fiiThreshold} onChange={e => setFiiThreshold(+e.target.value)} min={0} max={20000} step={500} style={{ ...inputStyle, width: "100%" }} />
-              <span style={{ fontSize: 11, color: "#475569", whiteSpace: "nowrap" }}>Alert if |FII| ≥</span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>Alert if |FII| ≥</span>
             </div>
           </div>
         </div>
@@ -291,8 +291,8 @@ export default function SettingsPage() {
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9" }}>🌐 Browser Notifications</div>
-            <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>Push alerts in the browser while ATBot is open</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>🌐 Browser Notifications</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Push alerts in the browser while ATBot is open</div>
           </div>
           <Toggle id="browser" checked={notifyBrowser} onChange={setNotifyBrowser} />
         </div>
@@ -300,22 +300,22 @@ export default function SettingsPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9" }}>📱 Telegram Alerts</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>📱 Telegram Alerts</span>
               <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.3)", color: "#f59e0b", fontWeight: 700 }}>PHASE 7</span>
             </div>
-            <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>Receive signal alerts directly in Telegram</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Receive signal alerts directly in Telegram</div>
           </div>
           <Toggle id="telegram" checked={notifyTelegram} onChange={setNotifyTelegram} />
         </div>
 
         {notifyTelegram && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} style={{ paddingTop: 12 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 6 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
               TELEGRAM CHAT ID
             </label>
             <input type="text" value={telegramId} onChange={e => setTelegramId(e.target.value)}
               placeholder="e.g. 123456789" style={{ ...inputStyle, width: "100%" }} />
-            <div style={{ fontSize: 11, color: "#334155", marginTop: 6 }}>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
               Get your Chat ID by messaging @userinfobot on Telegram
             </div>
           </motion.div>
@@ -328,7 +328,7 @@ export default function SettingsPage() {
         <SectionHeader icon="🔍" title="Screener Defaults" subtitle="Pre-fill the Screener page with your preferred settings" />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 6 }}>DEFAULT UNIVERSE</label>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>DEFAULT UNIVERSE</label>
             <select value={screenerUniverse} onChange={e => setScreenerUniverse(e.target.value)}
               style={{ ...inputStyle, width: "100%" }}>
               <option value="nifty50">Nifty 50</option>
@@ -336,7 +336,7 @@ export default function SettingsPage() {
             </select>
           </div>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 6 }}>DEFAULT SORT BY</label>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>DEFAULT SORT BY</label>
             <select value={screenerSort} onChange={e => setScreenerSort(e.target.value)}
               style={{ ...inputStyle, width: "100%" }}>
               <option value="score">Composite Score ↓</option>
@@ -366,7 +366,7 @@ export default function SettingsPage() {
       {/* ── How position sizing works ────────────────────────────────────── */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
         className="glass-card p-6" style={{ marginTop: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9", marginBottom: 14 }}>⚙ How Position Sizing Works</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 14 }}>⚙ How Position Sizing Works</div>
         {[
           { step: "1", text: "ATBot calculates risk per share = Current Price − Stop Loss (ATR-based)" },
           { step: "2", text: "It targets risking 1–2% of your capital per trade (based on signal confidence + risk profile)" },
@@ -375,7 +375,7 @@ export default function SettingsPage() {
         ].map(({ step, text }) => (
           <div key={step} style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10 }}>
             <div style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#60a5fa", flexShrink: 0 }}>{step}</div>
-            <span style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>{text}</span>
+            <span style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>{text}</span>
           </div>
         ))}
       </motion.div>

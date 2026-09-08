@@ -36,7 +36,7 @@ export default function StockCard({ symbol, companyName, price, change, changePc
           <div className="flex items-start justify-between mb-3">
             <div>
               <div className="flex items-center gap-2">
-                <span style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9" }}>{ticker}</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>{ticker}</span>
                 <span
                   className="metric-chip"
                   style={{ color: regimeColor, borderColor: regimeColor + "40", background: regimeColor + "15" }}
@@ -44,7 +44,7 @@ export default function StockCard({ symbol, companyName, price, change, changePc
                   {regime}
                 </span>
               </div>
-              <p style={{ fontSize: 11, color: "#64748b", marginTop: 2 }} className="truncate max-w-[160px]">
+              <p style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }} className="truncate max-w-[160px]">
                 {companyName}
               </p>
             </div>
@@ -73,7 +73,7 @@ export default function StockCard({ symbol, companyName, price, change, changePc
           <div className="mb-3">
             {price ? (
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 22, fontWeight: 700, color: "#f1f5f9" }}>
+                <span style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>
                   ₹{price.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                 </span>
                 {changePct != null && change != null && (
@@ -93,7 +93,7 @@ export default function StockCard({ symbol, companyName, price, change, changePc
                 )}
               </div>
             ) : (
-              <span style={{ fontSize: 14, color: "#475569" }}>Price unavailable</span>
+              <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Price unavailable</span>
             )}
           </div>
 
@@ -108,8 +108,8 @@ export default function StockCard({ symbol, companyName, price, change, changePc
               { label: "S", val: analysis.components.sentiment },
             ].map(({ label, val }) => (
               <div key={label} className="flex-1">
-                <div style={{ fontSize: 9, color: "#475569", textAlign: "center", marginBottom: 2 }}>{label}</div>
-                <div style={{ height: 3, borderRadius: 99, background: "rgba(255,255,255,0.06)" }}>
+                <div style={{ fontSize: 9, color: "var(--text-muted)", textAlign: "center", marginBottom: 2 }}>{label}</div>
+                <div style={{ height: 3, borderRadius: 99, background: "var(--hover-bg)" }}>
                   <div
                     style={{
                       height: "100%",

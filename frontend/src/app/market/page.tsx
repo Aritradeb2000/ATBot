@@ -27,7 +27,7 @@ const sectorBg = (pct: number) => {
 
 // ── Inline Bar Chart (no extra library) ──────────────────────────────────────
 function FiiBarChart({ data }: { data: FiiDiiPoint[] }) {
-  if (!data.length) return <div style={{ color: "#475569", textAlign: "center", padding: 40 }}>No data available</div>;
+  if (!data.length) return <div style={{ color: "var(--text-muted)", textAlign: "center", padding: 40 }}>No data available</div>;
 
   const maxAbs = Math.max(...data.map(d => Math.max(Math.abs(d.fii_net), Math.abs(d.dii_net))), 1);
   const barW = Math.max(8, Math.floor(760 / (data.length * 2.2)));
@@ -73,7 +73,7 @@ function FiiBarChart({ data }: { data: FiiDiiPoint[] }) {
         ].map(({ color, label }) => (
           <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <div style={{ width: 10, height: 10, borderRadius: 2, background: color }} />
-            <span style={{ fontSize: 10, color: "#64748b" }}>{label}</span>
+            <span style={{ fontSize: 10, color: "var(--text-secondary)" }}>{label}</span>
           </div>
         ))}
       </div>
@@ -83,7 +83,7 @@ function FiiBarChart({ data }: { data: FiiDiiPoint[] }) {
 
 // ── VIX Line Chart ────────────────────────────────────────────────────────────
 function VixLineChart({ data }: { data: VixPoint[] }) {
-  if (!data.length) return <div style={{ color: "#475569", textAlign: "center", padding: 40 }}>No data available</div>;
+  if (!data.length) return <div style={{ color: "var(--text-muted)", textAlign: "center", padding: 40 }}>No data available</div>;
 
   const chartW = 760;
   const chartH = 160;
@@ -157,7 +157,7 @@ function VixLineChart({ data }: { data: VixPoint[] }) {
 
 // ── Sector Heatmap ────────────────────────────────────────────────────────────
 function SectorHeatmap({ data }: { data: SectorPoint[] }) {
-  if (!data.length) return <div style={{ color: "#475569", textAlign: "center", padding: 40 }}>Loading sectors…</div>;
+  if (!data.length) return <div style={{ color: "var(--text-muted)", textAlign: "center", padding: 40 }}>Loading sectors…</div>;
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
@@ -175,7 +175,7 @@ function SectorHeatmap({ data }: { data: SectorPoint[] }) {
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9", marginBottom: 6 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>
             {s.sector}
           </div>
           <div style={{
@@ -184,7 +184,7 @@ function SectorHeatmap({ data }: { data: SectorPoint[] }) {
           }}>
             {s.change_pct >= 0 ? "▲" : "▼"} {Math.abs(s.change_pct).toFixed(2)}%
           </div>
-          <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
+          <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 4 }}>
             ₹{s.price.toLocaleString("en-IN")}
           </div>
         </motion.div>
@@ -209,8 +209,8 @@ export default function MarketPage() {
     <div style={{ maxWidth: 1200 }}>
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>Market Intelligence</h1>
-        <p style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>Market Intelligence</h1>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
           Real-time FII/DII flows, volatility, sector performance and market breadth
         </p>
       </motion.div>
@@ -219,20 +219,20 @@ export default function MarketPage() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
         {/* Indices */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="glass-card p-6">
-          <h2 style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 16 }}>INDICES</h2>
+          <h2 style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", marginBottom: 16 }}>INDICES</h2>
           {isLoading
             ? [...Array(3)].map((_, i) => <div key={i} className="shimmer mb-3" style={{ height: 52, borderRadius: 10 }} />)
             : Object.entries(indices).map(([name, info]) => (
-                <div key={name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", borderRadius: 10, background: "rgba(255,255,255,0.04)", marginBottom: 8 }}>
+                <div key={name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", borderRadius: 10, background: "var(--hover-bg)", marginBottom: 8 }}>
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8" }}>{name}</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: "#f1f5f9" }}>₹{info.price.toLocaleString("en-IN")}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)" }}>{name}</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>₹{info.price.toLocaleString("en-IN")}</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 16, fontWeight: 700, color: info.change_pct >= 0 ? "#22c55e" : "#ef4444" }}>
                       {info.change_pct >= 0 ? "▲" : "▼"} {Math.abs(info.change_pct).toFixed(2)}%
                     </div>
-                    <div style={{ fontSize: 11, color: "#475569" }}>H: ₹{info.high.toLocaleString("en-IN")} · L: ₹{info.low.toLocaleString("en-IN")}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>H: ₹{info.high.toLocaleString("en-IN")} · L: ₹{info.low.toLocaleString("en-IN")}</div>
                   </div>
                 </div>
               ))}
@@ -240,7 +240,7 @@ export default function MarketPage() {
 
         {/* India VIX current */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-card p-6">
-          <h2 style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 16 }}>INDIA VIX — FEAR INDEX</h2>
+          <h2 style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", marginBottom: 16 }}>INDIA VIX — FEAR INDEX</h2>
           {isLoading || !vix ? (
             <div className="shimmer" style={{ height: 120, borderRadius: 12 }} />
           ) : (
@@ -262,11 +262,11 @@ export default function MarketPage() {
                 <div style={{ height: 8, borderRadius: 99, background: "linear-gradient(90deg, #22c55e, #f59e0b, #ef4444)", position: "relative" }}>
                   <div style={{ position: "absolute", left: `${Math.min((vix.vix / 40) * 100, 100)}%`, top: "50%", transform: "translate(-50%, -50%)", width: 14, height: 14, borderRadius: "50%", background: "#fff", border: "2px solid #0d1225", boxShadow: "0 0 8px rgba(255,255,255,0.4)" }} />
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 9, color: "#334155" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 9, color: "var(--text-muted)" }}>
                   <span>0 — Low Fear</span><span>20 — Medium</span><span>40 — High Fear</span>
                 </div>
               </div>
-              <p style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.6 }}>{vix.risk_comment}</p>
+              <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.6 }}>{vix.risk_comment}</p>
             </>
           )}
         </motion.div>
@@ -276,7 +276,7 @@ export default function MarketPage() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
         {/* FII/DII today */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass-card p-6">
-          <h2 style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 16 }}>FII / DII FLOWS (TODAY)</h2>
+          <h2 style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", marginBottom: 16 }}>FII / DII FLOWS (TODAY)</h2>
           {isLoading || !fii ? (
             <div className="shimmer" style={{ height: 120, borderRadius: 12 }} />
           ) : (
@@ -284,16 +284,16 @@ export default function MarketPage() {
               .map(({ label, val, icon }) => (
                 <div key={label} style={{ marginBottom: 16 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>{icon} {label}</span>
+                    <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>{icon} {label}</span>
                     <span style={{ fontSize: 18, fontWeight: 800, color: val >= 0 ? "#22c55e" : "#ef4444" }}>
                       {val >= 0 ? "+" : ""}₹{Math.abs(val).toLocaleString("en-IN")} Cr
                     </span>
                   </div>
-                  <div style={{ height: 6, borderRadius: 99, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                  <div style={{ height: 6, borderRadius: 99, background: "var(--hover-bg)", overflow: "hidden" }}>
                     <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(Math.abs(val) / 5000 * 100, 100)}%` }} transition={{ duration: 1, ease: "easeOut" }}
                       style={{ height: "100%", background: val >= 0 ? "#22c55e" : "#ef4444", borderRadius: 99 }} />
                   </div>
-                  <div style={{ fontSize: 11, color: "#334155", marginTop: 4 }}>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
                     {val > 1000 ? "Strong buyers — Bullish signal" : val > 0 ? "Mild buyers" : val < -1000 ? "Heavy sellers — Caution advised" : "Mild sellers"}
                   </div>
                 </div>
@@ -303,7 +303,7 @@ export default function MarketPage() {
 
         {/* Market Breadth */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card p-6">
-          <h2 style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 16 }}>MARKET BREADTH</h2>
+          <h2 style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", marginBottom: 16 }}>MARKET BREADTH</h2>
           {isLoading || !breadth ? (
             <div className="shimmer" style={{ height: 120, borderRadius: 12 }} />
           ) : (
@@ -311,9 +311,9 @@ export default function MarketPage() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
                 {[{ label: "Advances", val: breadth.advances, color: "#22c55e" }, { label: "Unchanged", val: breadth.unchanged, color: "#f59e0b" }, { label: "Declines", val: breadth.declines, color: "#ef4444" }]
                   .map(({ label, val, color }) => (
-                    <div key={label} style={{ textAlign: "center", padding: "14px 10px", borderRadius: 12, background: "rgba(255,255,255,0.04)" }}>
+                    <div key={label} style={{ textAlign: "center", padding: "14px 10px", borderRadius: 12, background: "var(--hover-bg)" }}>
                       <div style={{ fontSize: 28, fontWeight: 800, color }}>{val}</div>
-                      <div style={{ fontSize: 11, color: "#475569", fontWeight: 600, marginTop: 4 }}>{label}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600, marginTop: 4 }}>{label}</div>
                     </div>
                   ))}
               </div>
@@ -322,11 +322,11 @@ export default function MarketPage() {
                 <motion.div initial={{ flex: 0 }} animate={{ flex: breadth.unchanged }} transition={{ duration: 1 }} style={{ background: "#f59e0b" }} />
                 <motion.div initial={{ flex: 0 }} animate={{ flex: breadth.declines }} transition={{ duration: 1 }} style={{ background: "#ef4444" }} />
               </div>
-              <div style={{ marginTop: 16, padding: "12px 14px", borderRadius: 10, background: "rgba(255,255,255,0.04)" }}>
+              <div style={{ marginTop: 16, padding: "12px 14px", borderRadius: 10, background: "var(--hover-bg)" }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: breadth.advances > breadth.declines ? "#22c55e" : "#ef4444" }}>
                   {breadth.advances > breadth.declines ? `▲ Positive Breadth — ${breadth.advances} advancing` : `▼ Negative Breadth — ${breadth.declines} declining`}
                 </div>
-                <div style={{ fontSize: 11, color: "#475569", marginTop: 4 }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
                   A/D Ratio: {breadth.declines > 0 ? (breadth.advances / breadth.declines).toFixed(2) : "∞"}
                 </div>
               </div>
@@ -338,8 +338,8 @@ export default function MarketPage() {
       {/* Row 3: FII/DII 30-day bar chart */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="glass-card p-6" style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2 style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", margin: 0 }}>FII / DII NET FLOW — 30 DAYS (₹ Crore)</h2>
-          <span style={{ fontSize: 11, color: "#334155" }}>Green = FII · Blue = DII</span>
+          <h2 style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", margin: 0 }}>FII / DII NET FLOW — 30 DAYS (₹ Crore)</h2>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Green = FII · Blue = DII</span>
         </div>
         {fiiHistory.length === 0
           ? <div className="shimmer" style={{ height: 220, borderRadius: 10 }} />
@@ -349,13 +349,13 @@ export default function MarketPage() {
       {/* Row 4: VIX 30-day chart */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card p-6" style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2 style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", margin: 0 }}>INDIA VIX — 30-DAY TREND</h2>
+          <h2 style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", margin: 0 }}>INDIA VIX — 30-DAY TREND</h2>
           <div style={{ display: "flex", gap: 12, fontSize: 10 }}>
             {[{ color: "#22c55e", label: "Low <15" }, { color: "#f59e0b", label: "Moderate 15–20" }, { color: "#ef4444", label: "High >20" }]
               .map(({ color, label }) => (
                 <div key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                   <div style={{ width: 8, height: 8, borderRadius: 2, background: color }} />
-                  <span style={{ color: "#64748b" }}>{label}</span>
+                  <span style={{ color: "var(--text-secondary)" }}>{label}</span>
                 </div>
               ))}
           </div>
@@ -368,7 +368,7 @@ export default function MarketPage() {
       {/* Row 5: Sector Heatmap */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="glass-card p-6">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h2 style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", margin: 0 }}>SECTOR HEATMAP — TODAY</h2>
+          <h2 style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", margin: 0 }}>SECTOR HEATMAP — TODAY</h2>
           <div style={{ display: "flex", gap: 6, fontSize: 10 }}>
             {[
               { color: "#16a34a", label: ">+1.5%" },
@@ -380,7 +380,7 @@ export default function MarketPage() {
             ].map(({ color, label }) => (
               <div key={label} style={{ display: "flex", alignItems: "center", gap: 3 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: color }} />
-                <span style={{ color: "#64748b" }}>{label}</span>
+                <span style={{ color: "var(--text-secondary)" }}>{label}</span>
               </div>
             ))}
           </div>

@@ -72,9 +72,9 @@ export default function StockChart({ symbol, period = "6mo", interval = "1d", he
         vertLine: { color: "#3b82f6", width: 1, style: LineStyle.Dashed },
         horzLine: { color: "#3b82f6", width: 1, style: LineStyle.Dashed },
       },
-      rightPriceScale: { borderColor: "rgba(255,255,255,0.08)" },
+      rightPriceScale: { borderColor: "var(--border)" },
       timeScale: {
-        borderColor: "rgba(255,255,255,0.08)",
+        borderColor: "var(--border)",
         timeVisible: true,
         secondsVisible: false,
       },
@@ -130,7 +130,7 @@ export default function StockChart({ symbol, period = "6mo", interval = "1d", he
     return (
       <div style={{ height, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 10 }}>
         <div style={{ width: 32, height: 32, border: "3px solid rgba(59,130,246,0.3)", borderTopColor: "#3b82f6", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-        <span style={{ fontSize: 12, color: "#475569" }}>Loading chart…</span>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Loading chart…</span>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
@@ -140,7 +140,7 @@ export default function StockChart({ symbol, period = "6mo", interval = "1d", he
     return (
       <div style={{ height, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
         <span style={{ fontSize: 28 }}>📉</span>
-        <span style={{ fontSize: 13, color: "#475569" }}>Could not load chart data</span>
+        <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Could not load chart data</span>
       </div>
     );
   }

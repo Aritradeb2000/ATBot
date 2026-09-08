@@ -28,12 +28,12 @@ export default function NewsPage() {
   return (
     <div style={{ maxWidth: 900 }}>
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: "#f1f5f9", marginBottom: 4 }}>News Feed</h1>
-        <p style={{ fontSize: 13, color: "#475569", marginBottom: 24 }}>Live market news from Economic Times, Moneycontrol & Finnhub</p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)", marginBottom: 4 }}>News Feed</h1>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 24 }}>Live market news from Economic Times, Moneycontrol & Finnhub</p>
       </motion.div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid rgba(255,255,255,0.06)", paddingBottom: 12 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid var(--border)", paddingBottom: 12 }}>
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -53,7 +53,7 @@ export default function NewsPage() {
           </button>
         ))}
         {articles && (
-          <span style={{ marginLeft: "auto", fontSize: 12, color: "#334155", alignSelf: "center" }}>
+          <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-muted)", alignSelf: "center" }}>
             {filtered.length} articles
           </span>
         )}
@@ -67,7 +67,7 @@ export default function NewsPage() {
       ) : filtered.length === 0 ? (
         <div className="glass-card p-8" style={{ textAlign: "center" }}>
           <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
-          <p style={{ color: "#64748b", fontSize: 13 }}>
+          <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>
             {activeTab === "my-stocks"
               ? "No news found for your watchlist stocks. Backend may be fetching..."
               : "No articles loaded yet. The news feed refreshes every 10 minutes."}
@@ -94,7 +94,7 @@ export default function NewsPage() {
                     {article.headline}
                   </p>
                   {article.summary && (
-                    <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 8px", lineHeight: 1.4 }}>
+                    <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 8px", lineHeight: 1.4 }}>
                       {article.summary.slice(0, 180)}{article.summary.length > 180 ? "…" : ""}
                     </p>
                   )}
@@ -105,7 +105,7 @@ export default function NewsPage() {
                         {article.symbol.replace(".NS", "").replace(".BO", "")}
                       </span>
                     )}
-                    <span style={{ fontSize: 11, color: "#334155", marginLeft: "auto" }}>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: "auto" }}>
                       {article.published_at
                         ? new Date(article.published_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
                         : ""}
