@@ -3,8 +3,9 @@ ATBot — Market & Screener Endpoints
 Routes for market breadth, index status, and screener functionality
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, BackgroundTasks
 import logging
+import asyncio
 import yfinance as yf
 
 from backend.data.scheduler import get_cache
@@ -14,6 +15,15 @@ from backend.data.nse_live import get_fii_dii_history
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Market"])
+
+
+@router.post("/market/refresh-fii")
+async def trigger_fii_refresh():
+    """Manually trigger FII/DII data refresh and update the live in-memory cache."""
+    from backend.data.scheduler import job_refresh_fii_dii
+    asyncio.create_task(job_refresh_fii_dii())
+    return {"status": "started", "message": "FII/DII refresh triggered in background"}
+
 
 @router.get("/ohlcv/{symbol}")
 async def get_ohlcv(
