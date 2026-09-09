@@ -31,7 +31,7 @@ export default function StockCard({ symbol, companyName, price, change, changePc
       whileHover={{ y: -3, transition: { duration: 0.15 } }}
     >
       <Link href={`/stock/${encodeURIComponent(symbol)}`}>
-        <div className="glass-card p-4 cursor-pointer group" style={{ minHeight: 160 }}>
+        <div className="glass-card p-4 cursor-pointer group" style={{ minHeight: 160, overflow: "hidden" }}>
           {/* Header row */}
           <div className="flex items-start justify-between mb-3">
             <div>

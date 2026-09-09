@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useState, useEffect } from "react";
 import useSWR from "swr";
 import { motion } from "framer-motion";
@@ -325,7 +325,7 @@ export default function DashboardPage() {
                 >
                   <Link href={`/stock/${r.symbol}`} style={{ textDecoration: "none" }}>
                     <div className="glass-card p-3 cursor-pointer"
-                      style={{ transition: "border-color 0.15s" }}
+                      style={{ transition: "border-color 0.15s", overflow: "hidden" }}
                       onMouseEnter={(e) => e.currentTarget.style.borderColor = "rgba(59,130,246,0.4)"}
                       onMouseLeave={(e) => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}>
                       {/* Row 1: ticker + signal */}
@@ -335,7 +335,7 @@ export default function DashboardPage() {
                           <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, padding: "2px 5px", borderRadius: 4,
                             background: regimeColor(r.regime) + "18", color: regimeColor(r.regime) }}>{r.regime}</span>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
                           <span style={{ fontSize: 16, fontWeight: 800, color: scoreColor(r.score) }}>{r.score}</span>
                           <SignalBadge signal={r.signal} size="sm" />
                         </div>

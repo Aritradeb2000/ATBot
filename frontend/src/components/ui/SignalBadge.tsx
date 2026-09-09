@@ -31,7 +31,7 @@ export default function SignalBadge({ signal, confidence, size = "md" }: Props) 
       style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.text }}
     >
       {/* Pulse dot */}
-      <span className="relative flex items-center justify-center" style={{ width: 8, height: 8 }}>
+      <span className="relative flex items-center justify-center" style={{ width: 10, height: 10, flexShrink: 0 }}>
         <span
           className="absolute rounded-full"
           style={{
@@ -43,7 +43,7 @@ export default function SignalBadge({ signal, confidence, size = "md" }: Props) 
         {c.pulse && (
           <span
             className="absolute rounded-full animate-ping"
-            style={{ width: 8, height: 8, background: c.dot, opacity: 0.5 }}
+            style={{ width: 8, height: 8, background: c.dot, opacity: 0.4 }}
           />
         )}
       </span>

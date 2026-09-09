@@ -112,6 +112,7 @@ html, body {
     border: 1px solid var(--border);
     border-radius: 16px;
     backdrop-filter: blur(12px);
+    overflow: hidden;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.3s ease;
   }
   .glass-card:hover {
