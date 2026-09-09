@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import useSWR from "swr";
@@ -159,7 +159,7 @@ export default function SettingsPage() {
   ] as const;
 
   const inputStyle: React.CSSProperties = {
-    padding: "9px 12px", borderRadius: 8, background: "rgba(255,255,255,0.05)",
+    padding: "9px 12px", borderRadius: 8, background: "var(--hover-bg)",
     border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-primary)", fontSize: 13, outline: "none",
   };
 
@@ -204,7 +204,7 @@ export default function SettingsPage() {
         {/* Capital info pill */}
         {capital > 0 && (
           <div style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.15)" }}>
-            <span style={{ fontSize: 12, color: "#93c5fd" }}>
+            <span style={{ fontSize: 12, color: "var(--accent-blue)" }}>
               💡 With {fmt(capital)} capital, ATBot risks{" "}
               {riskProfile === "conservative" ? "1%" : riskProfile === "moderate" ? "1.5%" : "2%"} per trade
               = up to {fmt(capital * (riskProfile === "conservative" ? 0.01 : riskProfile === "moderate" ? 0.015 : 0.02))} risk per trade,

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import useSWR from "swr";
 import { motion } from "framer-motion";
 import { getMarketNews, type NewsArticle } from "@/lib/api";
@@ -90,7 +90,7 @@ export default function NewsPage() {
             >
               <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
                 <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: "#e2e8f0", margin: "0 0 6px", lineHeight: 1.45 }}>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 6px", lineHeight: 1.45 }}>
                     {article.headline}
                   </p>
                   {article.summary && (

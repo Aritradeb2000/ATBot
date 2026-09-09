@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { runOptimizer, type OptimizerResult, type OptimizerAllocation } from "@/lib/api";
@@ -135,7 +135,7 @@ function AllocationRow({ a, rank }: { a: OptimizerAllocation; rank: number }) {
           {a.rr_ratio ? `1 : ${a.rr_ratio}` : "—"}
         </span>
       </td>
-      <td style={{ ...td, textAlign: "right", color: "#818cf8" }}>{a.score}</td>
+      <td style={{ ...td, textAlign: "right", color: "var(--accent-blue)" }}>{a.score}</td>
       <td style={{ ...td, textAlign: "right", color: "var(--text-secondary)" }}>{a.confidence}%</td>
     </motion.tr>
   );
@@ -145,7 +145,7 @@ const td: React.CSSProperties = {
   padding: "12px 14px",
   fontSize: 12,
   color: "var(--text-secondary)",
-  borderBottom: "1px solid rgba(255,255,255,0.04)",
+  borderBottom: "1px solid var(--border)",
   verticalAlign: "middle",
 };
 
@@ -298,7 +298,7 @@ export default function OptimizerPage() {
                 style={{
                   width: "100%", padding: "12px 14px 12px 32px", boxSizing: "border-box",
                   borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)",
-                  background: "rgba(255,255,255,0.05)", color: "var(--text-primary)", fontSize: 16, fontWeight: 700, outline: "none",
+                  background: "var(--hover-bg)", color: "var(--text-primary)", fontSize: 16, fontWeight: 700, outline: "none",
                 }}
               />
             </div>
@@ -430,7 +430,7 @@ export default function OptimizerPage() {
                     </div>
                     <button
                       onClick={handleRun}
-                      style={{ padding: "9px 20px", borderRadius: 9, fontSize: 12, fontWeight: 700, background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)", color: "#818cf8", cursor: "pointer" }}
+                      style={{ padding: "9px 20px", borderRadius: 9, fontSize: 12, fontWeight: 700, background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)", color: "var(--accent-blue)", cursor: "pointer" }}
                     >
                       🔄 Refresh Plan
                     </button>

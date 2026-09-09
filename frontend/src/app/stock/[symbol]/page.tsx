@@ -110,9 +110,9 @@ export default function StockDetailPage({ params }: Props) {
     <div style={{ maxWidth: 1200 }}>
       {/* Breadcrumb */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ marginBottom: 20 }}>
-        <a href="/" style={{ fontSize: 12, color: "#475569" }}>Dashboard</a>
-        <span style={{ color: "#334155", margin: "0 6px" }}>›</span>
-        <span style={{ fontSize: 12, color: "#94a3b8" }}>{ticker}</span>
+        <a href="/" style={{ fontSize: 12, color: "var(--text-muted)" }}>Dashboard</a>
+        <span style={{ color: "var(--text-muted)", margin: "0 6px" }}>›</span>
+        <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{ticker}</span>
       </motion.div>
 
       {/* Stock Header */}
@@ -123,14 +123,14 @@ export default function StockDetailPage({ params }: Props) {
       >
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>{ticker}</h1>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>{ticker}</h1>
             {mounted && (
               <button
                 onClick={toggleWatchlist}
                 style={{
-                  background: inWatchlist ? "rgba(245,158,11,0.1)" : "rgba(255,255,255,0.05)",
-                  border: `1px solid ${inWatchlist ? "rgba(245,158,11,0.3)" : "rgba(255,255,255,0.1)"}`,
-                  color: inWatchlist ? "#fcd34d" : "#94a3b8",
+                  background: inWatchlist ? "rgba(245,158,11,0.1)" : "var(--hover-bg)",
+                  border: `1px solid ${inWatchlist ? "rgba(245,158,11,0.3)" : "var(--border)"}`,
+                  color: inWatchlist ? "#fcd34d" : "var(--text-secondary)",
                   padding: "6px 12px",
                   borderRadius: 20,
                   fontSize: 12,
@@ -155,15 +155,15 @@ export default function StockDetailPage({ params }: Props) {
               {analysis.regime} Market
             </span>
           </div>
-          <p style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>{company_name}</p>
+          <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>{company_name}</p>
         </div>
         <div style={{ textAlign: "right" }}>
           {current_price && (
-            <div style={{ fontSize: 32, fontWeight: 800, color: "#f1f5f9" }}>
+            <div style={{ fontSize: 32, fontWeight: 800, color: "var(--text-primary)" }}>
               ₹{current_price.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
             </div>
           )}
-          <div style={{ fontSize: 12, color: "#475569", marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
             ATR: ₹{details.technical.atr?.toFixed(2) ?? "—"}
           </div>
         </div>
@@ -178,15 +178,15 @@ export default function StockDetailPage({ params }: Props) {
       >
         <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
           <div>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "#94a3b8" }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>
               📊 {ticker} — Interactive Chart
             </span>
-            <span style={{ fontSize: 11, color: "#475569", marginLeft: 10 }}>
+            <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 10 }}>
               Candlestick · Target lines (SL, T1, T2, T3) shown if available
             </span>
           </div>
           {/* Range toggle pills */}
-          <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: "3px 4px" }}>
+          <div style={{ display: "flex", gap: 4, background: "var(--hover-bg)", border: "1px solid var(--border)", borderRadius: 20, padding: "3px 4px" }}>
             {RANGES.map((r) => {
               const isActive = r.label === activeRange.label;
               return (
@@ -203,7 +203,7 @@ export default function StockDetailPage({ params }: Props) {
                     letterSpacing: "0.04em",
                     transition: "all 0.18s",
                     background: isActive ? "linear-gradient(135deg, #3b82f6, #6366f1)" : "transparent",
-                    color: isActive ? "#fff" : "#64748b",
+                    color: isActive ? "#fff" : "var(--text-secondary)",
                   }}
                 >
                   {r.label}
@@ -231,7 +231,7 @@ export default function StockDetailPage({ params }: Props) {
 
         {/* Score Gauges */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass-card p-6">
-          <h3 style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", marginBottom: 20 }}>ENGINE SCORES</h3>
+          <h3 style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", marginBottom: 20 }}>ENGINE SCORES</h3>
           <div style={{ display: "flex", justifyContent: "space-around", marginBottom: 20 }}>
             <ScoreGauge score={analysis.components.technical}    label="Technical"    size={100} />
             <ScoreGauge score={analysis.components.fundamental}  label="Fundamental"  size={100} />
@@ -239,24 +239,24 @@ export default function StockDetailPage({ params }: Props) {
           </div>
 
           {/* Engine weights */}
-          <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14 }}>
-            <div style={{ fontSize: 11, color: "#475569", marginBottom: 8, fontWeight: 600 }}>DYNAMIC WEIGHTS</div>
+          <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8, fontWeight: 600 }}>DYNAMIC WEIGHTS</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
               {[
                 { label: "Technical", val: analysis.weights_used.T },
                 { label: "Fundamental", val: analysis.weights_used.F },
                 { label: "Sentiment", val: analysis.weights_used.S },
               ].map(({ label, val }) => (
-                <div key={label} style={{ textAlign: "center", padding: "6px 4px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
+                <div key={label} style={{ textAlign: "center", padding: "6px 4px", background: "var(--hover-bg)", borderRadius: 8 }}>
                   <div style={{ fontSize: 16, fontWeight: 700, color: "#60a5fa" }}>{Math.round(val * 100)}%</div>
-                  <div style={{ fontSize: 9, color: "#475569", fontWeight: 600 }}>{label.toUpperCase().slice(0, 4)}</div>
+                  <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 600 }}>{label.toUpperCase().slice(0, 4)}</div>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Tab: signals / fundamental / sentiment */}
-          <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14 }}>
+          <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
             <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
               {(["signals", "fundamental", "sentiment"] as const).map((tab) => (
                 <button
@@ -266,7 +266,7 @@ export default function StockDetailPage({ params }: Props) {
                     fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 6,
                     background: activeTab === tab ? "rgba(59,130,246,0.2)" : "transparent",
                     border: activeTab === tab ? "1px solid rgba(59,130,246,0.4)" : "1px solid transparent",
-                    color: activeTab === tab ? "#60a5fa" : "#475569",
+                    color: activeTab === tab ? "#60a5fa" : "var(--text-muted)",
                     cursor: "pointer",
                     textTransform: "capitalize",
                   }}
@@ -278,7 +278,7 @@ export default function StockDetailPage({ params }: Props) {
             {activeTab === "signals" && (
               <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                 {details.technical.signals.map((s, i) => (
-                  <li key={i} style={{ fontSize: 11, color: "#94a3b8", padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <li key={i} style={{ fontSize: 11, color: "var(--text-secondary)", padding: "3px 0", borderBottom: "1px solid var(--border)" }}>
                     {s.startsWith("Error") ? `⚠ ${s}` : `• ${s}`}
                   </li>
                 ))}
@@ -289,7 +289,7 @@ export default function StockDetailPage({ params }: Props) {
                 {details.fundamental.flags.map((f, i) => {
                   const isNegative = f.includes("Negative") || f.includes("Expensive") || f.includes("High Debt") || f.includes("Low ROE") || f.includes("Low Promoter") || f.includes("Low Profit");
                   return (
-                    <li key={i} style={{ fontSize: 11, color: isNegative ? "#ef4444" : "#86efac", padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                    <li key={i} style={{ fontSize: 11, color: isNegative ? "#ef4444" : "#22c55e", padding: "3px 0", borderBottom: "1px solid var(--border)" }}>
                       {isNegative ? "✗ " : "✓ "} {f.replace("⚠️ ", "")}
                     </li>
                   );
@@ -299,13 +299,13 @@ export default function StockDetailPage({ params }: Props) {
             {activeTab === "sentiment" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {details.sentiment.flags.map((f, i) => (
-                  <div key={i} style={{ fontSize: 11, color: "#94a3b8", padding: "3px 0" }}>• {f}</div>
+                  <div key={i} style={{ fontSize: 11, color: "var(--text-secondary)", padding: "3px 0" }}>• {f}</div>
                 ))}
                 <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                   {Object.entries(details.sentiment.news_breakdown).map(([k, v]) => (
-                    <div key={k} style={{ flex: 1, textAlign: "center", background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: "6px 4px" }}>
+                    <div key={k} style={{ flex: 1, textAlign: "center", background: "var(--hover-bg)", borderRadius: 8, padding: "6px 4px" }}>
                       <div style={{ fontSize: 16, fontWeight: 700, color: k === "positive" ? "#22c55e" : k === "negative" ? "#ef4444" : "#f59e0b" }}>{v}</div>
-                      <div style={{ fontSize: 9, color: "#475569", textTransform: "uppercase" }}>{k}</div>
+                      <div style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase" }}>{k}</div>
                     </div>
                   ))}
                 </div>

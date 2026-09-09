@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { motion } from "framer-motion";
 
 interface Props {
@@ -99,7 +99,7 @@ export default function PriceTargetBar({ currentPrice, stopLoss, conservative, b
               <div style={{ fontSize: 10, fontWeight: 700, color: m.textColor, lineHeight: 1.2 }}>
                 {m.label}
               </div>
-              <div style={{ fontSize: 9, color: "#64748b", lineHeight: 1.2 }}>
+              <div style={{ fontSize: 9, color: "var(--text-secondary)", lineHeight: 1.2 }}>
                 ₹{m.val.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
               </div>
             </div>

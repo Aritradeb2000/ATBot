@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import useSWR from "swr";
@@ -373,7 +373,7 @@ export default function LearnPage() {
               ))}
             </div>
             <select value={lookback} onChange={e => setLookback(+e.target.value)} style={{
-              padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.05)",
+              padding: "6px 10px", borderRadius: 8, background: "var(--hover-bg)",
               border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-primary)", fontSize: 12, outline: "none",
             }}>
               <option value={30}>Last 30 days</option>
@@ -516,7 +516,7 @@ export default function LearnPage() {
               </div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#22c55e", marginBottom: 8 }}>🏆 Most Accurate</div>
               {stats.top_stocks.map(s => (
-                <div key={s.symbol} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <div key={s.symbol} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>{s.symbol.replace(".NS", "")}</span>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#22c55e" }}>{s.win_rate}% win rate</div>
@@ -526,7 +526,7 @@ export default function LearnPage() {
               ))}
               <div style={{ fontSize: 11, fontWeight: 700, color: "#ef4444", margin: "14px 0 8px" }}>⚠ Needs Attention</div>
               {stats.worst_stocks.map(s => (
-                <div key={s.symbol} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <div key={s.symbol} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>{s.symbol.replace(".NS", "")}</span>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#ef4444" }}>{s.win_rate}% win rate</div>
@@ -561,7 +561,7 @@ export default function LearnPage() {
 
                 {recent.map((r, i) => (
                   <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
-                    style={{ display: "grid", gridTemplateColumns: "100px 1fr 80px 70px 80px 80px 80px 100px", gap: 8, padding: "10px 10px", borderRadius: 8, marginBottom: 4, background: "rgba(255,255,255,0.03)", alignItems: "center" }}>
+                    style={{ display: "grid", gridTemplateColumns: "100px 1fr 80px 70px 80px 80px 80px 100px", gap: 8, padding: "10px 10px", borderRadius: 8, marginBottom: 4, background: "var(--hover-bg)", alignItems: "center" }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>{r.symbol.replace(".NS", "")}</div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: signalColor(r.signal) }}>{r.signal}</div>
                     <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{r.entry_date}</div>

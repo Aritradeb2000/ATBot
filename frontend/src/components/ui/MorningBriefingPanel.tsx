@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import useSWR from "swr";
@@ -90,7 +90,7 @@ export default function MorningBriefingPanel() {
             style={{
               padding: "5px 13px", borderRadius: 8, fontSize: 11, fontWeight: 700,
               background: "rgba(99,102,241,0.2)", border: "1px solid rgba(99,102,241,0.4)",
-              color: "#818cf8", cursor: triggering ? "not-allowed" : "pointer",
+              color: "var(--accent-blue)", cursor: triggering ? "not-allowed" : "pointer",
             }}
           >
             {triggering ? "Generating…" : "⚡ Generate"}
@@ -173,7 +173,7 @@ export default function MorningBriefingPanel() {
                 {briefing.global_cues && Object.keys(briefing.global_cues).length > 0 ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {Object.entries(briefing.global_cues).slice(0, 6).map(([name, cue]) => (
-                      <div key={name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)" }}>
+                      <div key={name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderRadius: 8, background: "var(--hover-bg)" }}>
                         <span style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600 }}>{name}</span>
                         <div style={{ textAlign: "right" }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
@@ -197,7 +197,7 @@ export default function MorningBriefingPanel() {
                       ⚡ EARNINGS TODAY
                     </div>
                     {briefing.earnings_today.map(e => (
-                      <div key={e.symbol} style={{ fontSize: 11, color: "#fcd34d", padding: "4px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                      <div key={e.symbol} style={{ fontSize: 11, color: "#fcd34d", padding: "4px 0", borderBottom: "1px solid var(--border)" }}>
                         {e.symbol.replace(".NS", "")} — {e.company_name}
                       </div>
                     ))}
@@ -216,7 +216,7 @@ export default function MorningBriefingPanel() {
                       <a key={s.symbol} href={`/stock/${s.symbol}`} style={{ textDecoration: "none" }}>
                         <motion.div
                           whileHover={{ x: 2 }}
-                          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)", cursor: "pointer" }}
+                          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid rgba(255,255,255,0.05)", cursor: "pointer" }}
                         >
                           <div>
                             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
@@ -269,7 +269,7 @@ function IndexRow({ label, data }: { label: string; data: { price: number; chang
 function FiiDiiPill({ label, value }: { label: string; value: number }) {
   const isPos = value >= 0;
   return (
-    <div style={{ flex: 1, padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)", textAlign: "center" }}>
+    <div style={{ flex: 1, padding: "6px 10px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid var(--border)", textAlign: "center" }}>
       <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 600 }}>{label}</div>
       <div style={{ fontSize: 11, fontWeight: 700, color: isPos ? "#22c55e" : "#ef4444", marginTop: 2 }}>
         {isPos ? "+" : ""}₹{Math.abs(value).toLocaleString("en-IN")} Cr

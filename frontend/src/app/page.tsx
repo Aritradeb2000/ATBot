@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useEffect } from "react";
 import useSWR from "swr";
 import { motion } from "framer-motion";
@@ -214,7 +214,7 @@ export default function DashboardPage() {
               padding: "10px 16px",
               borderRadius: 10,
               border: "1px solid rgba(255,255,255,0.1)",
-              background: "rgba(255,255,255,0.05)",
+              background: "var(--hover-bg)",
               color: "var(--text-primary)",
               fontSize: 13,
               outline: "none",
@@ -240,7 +240,7 @@ export default function DashboardPage() {
             style={{
               padding: "10px 16px",
               borderRadius: 10,
-              background: "rgba(255,255,255,0.05)",
+              background: "var(--hover-bg)",
               border: "1px solid rgba(255,255,255,0.1)",
               color: "var(--text-primary)",
               fontSize: 13,

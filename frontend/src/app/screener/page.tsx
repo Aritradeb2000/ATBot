@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -253,7 +253,7 @@ export default function ScreenerPage() {
               ].map(({ label, val, set }) => (
                 <input key={label} type="number" value={val} min={0} max={100}
                   onChange={(e) => set(+e.target.value)}
-                  style={{ width: "100%", padding: "6px 8px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-primary)", fontSize: 12, outline: "none" }}
+                  style={{ width: "100%", padding: "6px 8px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-primary)", fontSize: 12, outline: "none" }}
                 />
               ))}
             </div>
@@ -265,7 +265,7 @@ export default function ScreenerPage() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortBy)}
-              style={{ width: "100%", marginTop: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-primary)", fontSize: 12, outline: "none" }}
+              style={{ width: "100%", marginTop: 8, padding: "8px 10px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-primary)", fontSize: 12, outline: "none" }}
             >
               <option value="score">Composite Score ↓</option>
               <option value="rsi">RSI Low → High</option>

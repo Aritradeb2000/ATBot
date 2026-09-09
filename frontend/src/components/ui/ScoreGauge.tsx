@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { motion, useAnimationFrame } from "framer-motion";
 import { useRef, useState } from "react";
 
@@ -73,10 +73,10 @@ export default function ScoreGauge({ score, label, size = 120 }: Props) {
           >
             {Math.round(clampedScore)}
           </motion.span>
-          <span style={{ fontSize: size * 0.1, color: "#64748b", fontWeight: 500 }}>/ 100</span>
+          <span style={{ fontSize: size * 0.1, color: "var(--text-secondary)", fontWeight: 500 }}>/ 100</span>
         </div>
       </div>
-      <span style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
         {label}
       </span>
     </div>
