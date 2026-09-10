@@ -345,9 +345,21 @@ async def job_daily_screener():
         vix          = vix_data.get("vix", 14.0)
         fii_dii      = cache.get("fii_dii") or {}
 
+        breadth = cache.get("market_breadth") or {}
+        adv = int(breadth.get("nifty_advances", 25))
+        dec = int(breadth.get("nifty_declines", 25))
+        advances_pct = adv / (adv + dec) if (adv + dec) > 0 else 0.5
+        fii_net_5d = fii_dii.get("fii_net", 0.0) * 5  # proxy until rolling sum is stored
+
         # Determine today's market regime for labelling (Meta-Learner v2)
         from backend.engines.ensemble_scorer import determine_market_regime
-        today_regime = determine_market_regime(nifty_change, vix, nifty_change_20d)
+        today_regime = determine_market_regime(
+            nifty_change=nifty_change, 
+            vix=vix, 
+            nifty_change_20d=nifty_change_20d,
+            advances_pct=advances_pct,
+            fii_net_5d=fii_net_5d
+        )
         logger.info(f"  Auto-screener: today's regime = {today_regime}")
 
         BATCH_SIZE = 8
@@ -371,6 +383,7 @@ async def job_daily_screener():
                 final = calculate_composite(
                     tech_data=tech_result, fund_data=fund_result, sent_data=sent_result,
                     nifty_change=nifty_change, nifty_change_20d=nifty_change_20d, vix=vix,
+                    advances_pct=advances_pct, fii_net_5d=fii_net_5d,
                 )
 
                 targets_5d  = final.get("targets_5d")  or final.get("targets") or {}
@@ -466,7 +479,19 @@ async def job_nightly_precompute(universe_name: str = "nifty200"):
     vix          = vix_data.get("vix", 14.0)
     fii_dii      = cache.get("fii_dii") or {}
 
-    today_regime = determine_market_regime(nifty_change, vix, nifty_change_20d)
+    breadth = cache.get("market_breadth") or {}
+    adv = int(breadth.get("nifty_advances", 25))
+    dec = int(breadth.get("nifty_declines", 25))
+    advances_pct = adv / (adv + dec) if (adv + dec) > 0 else 0.5
+    fii_net_5d = fii_dii.get("fii_net", 0.0) * 5  # proxy until rolling sum is stored
+
+    today_regime = determine_market_regime(
+        nifty_change=nifty_change, 
+        vix=vix, 
+        nifty_change_20d=nifty_change_20d,
+        advances_pct=advances_pct,
+        fii_net_5d=fii_net_5d
+    )
     logger.info(f"  Nightly: today's regime = {today_regime}")
 
     saved   = 0
@@ -492,6 +517,7 @@ async def job_nightly_precompute(universe_name: str = "nifty200"):
             final = calculate_composite(
                 tech_data=tech_result, fund_data=fund_result, sent_data=sent_result,
                 nifty_change=nifty_change, nifty_change_20d=nifty_change_20d, vix=vix,
+                advances_pct=advances_pct, fii_net_5d=fii_net_5d,
             )
 
             targets = final.get("targets") or {}
