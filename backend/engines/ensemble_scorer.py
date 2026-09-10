@@ -33,16 +33,65 @@ def set_adaptive_weights(weights: Optional[dict]):
         )
 
 
-def determine_market_regime(nifty_change: float, vix: float, nifty_change_20d: float = 0.0) -> str:
+def determine_market_regime(
+    nifty_change: float, 
+    vix: float, 
+    nifty_change_20d: float = 0.0,
+    advances_pct: float = 0.5,
+    fii_net_5d: float = 0.0,
+) -> str:
     """
-    Determine if market is BULL, BEAR, or SIDEWAYS.
-    Uses 20-day trailing Nifty % change and VIX level for a more stable,
-    trend-based regime that doesn't flip on a single bad day.
+    Determine market regime using a multi-factor point system.
+    Trend is the primary gate: the market cannot be called BULL/BEAR unless 
+    the 20-day trend supports that direction. Confirming factors (VIX, breadth, FII) 
+    only adjust magnitude within an eligible trend.
     """
-    if vix > 22 and nifty_change_20d < -5:
-        return "BEAR"
-    elif nifty_change_20d > 3:
+    score = 0.0
+    trend_score = 0.0
+
+    # Factor 1: 20-day trend (±2 points)
+    # Using >= to avoid boundary ambiguity at exactly 4.0%
+    if nifty_change_20d >= 4.0:
+        trend_score = 2.0
+    elif nifty_change_20d >= 1.5:
+        trend_score = 1.0
+    elif nifty_change_20d <= -5.0:    # clear downtrend = BEAR alone
+        trend_score = -2.0
+    elif nifty_change_20d <= -2.5:    # mild downtrend = needs confirming
+        trend_score = -1.0
+        
+    score += trend_score
+
+    # Factor 2: VIX — ASYMMETRIC
+    # Low VIX only rewards uptrends. Calm selloffs are still selloffs.
+    if vix < 14.0 and nifty_change_20d >= 0:
+        score += 1.0
+    elif vix > 20.0:
+        score -= 1.0
+    elif vix > 17.0:
+        score -= 0.5
+
+    # Factor 3: Breadth 
+    # Asymmetric thresholds: making it harder to earn a BULL point (>0.65) 
+    # than a BEAR point (<0.40) to combat the BULL over-expansion issue.
+    if advances_pct > 0.65:
+        score += 1.0
+    elif advances_pct < 0.40:
+        score -= 1.0
+
+    # Factor 4: FII 5-day cumulative
+    if fii_net_5d > 3000:
+        score += 1.0
+    elif fii_net_5d < -3000:
+        score -= 1.0
+
+    # Gate: The final call MUST be supported by the trend.
+    # Non-trend factors alone cannot force a BULL/BEAR regime.
+    if score >= 2.5 and trend_score > 0:
         return "BULL"
+    elif score <= -2.0 and trend_score < 0:
+        return "BEAR"
+        
     return "SIDEWAYS"
 
 
@@ -62,7 +111,9 @@ def calculate_composite(
     nifty_change: float = 0.0,
     nifty_change_20d: float = 0.0,
     vix: float = 14.0,
-    user_capital: float = None
+    user_capital: float = None,
+    advances_pct: float = 0.5,
+    fii_net_5d: float = 0.0,
 ) -> dict:
     """
     Calculates final composite score and signal.
@@ -72,7 +123,13 @@ def calculate_composite(
     f_score = fund_data.get("score", 50)
     s_score = sent_data.get("score", 50)
 
-    regime = determine_market_regime(nifty_change, vix, nifty_change_20d)
+    regime = determine_market_regime(
+        nifty_change=nifty_change, 
+        vix=vix, 
+        nifty_change_20d=nifty_change_20d,
+        advances_pct=advances_pct,
+        fii_net_5d=fii_net_5d
+    )
 
     # ── Weight Selection: Regime-specific v2 > Global v2 > Regime static ──────
     adaptive = _get_adaptive_weights_sync()
