@@ -384,6 +384,7 @@ async def job_daily_screener():
                     tech_data=tech_result, fund_data=fund_result, sent_data=sent_result,
                     nifty_change=nifty_change, nifty_change_20d=nifty_change_20d, vix=vix,
                     advances_pct=advances_pct, fii_net_5d=fii_net_5d,
+                    regime=today_regime,   # pre-computed once for the batch
                 )
 
                 targets_5d  = final.get("targets_5d")  or final.get("targets") or {}
@@ -518,6 +519,7 @@ async def job_nightly_precompute(universe_name: str = "nifty200"):
                 tech_data=tech_result, fund_data=fund_result, sent_data=sent_result,
                 nifty_change=nifty_change, nifty_change_20d=nifty_change_20d, vix=vix,
                 advances_pct=advances_pct, fii_net_5d=fii_net_5d,
+                regime=today_regime,   # pre-computed once for the batch
             )
 
             targets = final.get("targets") or {}

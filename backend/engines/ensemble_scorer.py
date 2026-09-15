@@ -5,7 +5,6 @@ Combines Technical, Fundamental, and Sentiment scores using dynamic weighting
 Generates Price Targets & Stop Loss.
 """
 
-import asyncio
 import logging
 from typing import Optional
 
@@ -34,16 +33,16 @@ def set_adaptive_weights(weights: Optional[dict]):
 
 
 def determine_market_regime(
-    nifty_change: float, 
-    vix: float, 
+    nifty_change: float,             # reserved: 1-day momentum — not used in scoring yet
+    vix: float,
     nifty_change_20d: float = 0.0,
     advances_pct: float = 0.5,
     fii_net_5d: float = 0.0,
 ) -> str:
     """
     Determine market regime using a multi-factor point system.
-    Trend is the primary gate: the market cannot be called BULL/BEAR unless 
-    the 20-day trend supports that direction. Confirming factors (VIX, breadth, FII) 
+    Trend is the primary gate: the market cannot be called BULL/BEAR unless
+    the 20-day trend supports that direction. Confirming factors (VIX, breadth, FII)
     only adjust magnitude within an eligible trend.
     """
     score = 0.0
@@ -59,7 +58,7 @@ def determine_market_regime(
         trend_score = -2.0
     elif nifty_change_20d <= -2.5:    # mild downtrend = needs confirming
         trend_score = -1.0
-        
+
     score += trend_score
 
     # Factor 2: VIX — ASYMMETRIC
@@ -71,8 +70,8 @@ def determine_market_regime(
     elif vix > 17.0:
         score -= 0.5
 
-    # Factor 3: Breadth 
-    # Asymmetric thresholds: making it harder to earn a BULL point (>0.65) 
+    # Factor 3: Breadth
+    # Asymmetric thresholds: making it harder to earn a BULL point (>0.65)
     # than a BEAR point (<0.40) to combat the BULL over-expansion issue.
     if advances_pct > 0.65:
         score += 1.0
@@ -91,7 +90,7 @@ def determine_market_regime(
         return "BULL"
     elif score <= -2.0 and trend_score < 0:
         return "BEAR"
-        
+
     return "SIDEWAYS"
 
 
@@ -105,31 +104,42 @@ def _static_regime_weights(regime: str) -> dict:
 
 
 def calculate_composite(
-    tech_data: dict, 
-    fund_data: dict, 
+    tech_data: dict,
+    fund_data: dict,
     sent_data: dict,
-    nifty_change: float = 0.0,
+    nifty_change: float = 0.0,       # reserved: 1-day momentum, not yet used by regime logic
     nifty_change_20d: float = 0.0,
     vix: float = 14.0,
     user_capital: float = None,
     advances_pct: float = 0.5,
     fii_net_5d: float = 0.0,
+    regime: Optional[str] = None,    # pass pre-computed regime to skip per-stock recomputation
 ) -> dict:
     """
     Calculates final composite score and signal.
     tech_data, fund_data, sent_data are outputs from their respective engines.
+    Pass `regime` to avoid recomputing it for every stock in a batch.
     """
+    # ── Track which engines actually returned data ─────────────────────────────
+    # Default of 50 for missing engines would collapse variance → false confidence.
+    t_has_data = tech_data.get("score") is not None
+    f_has_data = fund_data.get("score") is not None
+    s_has_data = sent_data.get("score") is not None
+    missing_engines = sum(1 for x in (t_has_data, f_has_data, s_has_data) if not x)
+
     t_score = tech_data.get("score", 50)
     f_score = fund_data.get("score", 50)
     s_score = sent_data.get("score", 50)
 
-    regime = determine_market_regime(
-        nifty_change=nifty_change, 
-        vix=vix, 
-        nifty_change_20d=nifty_change_20d,
-        advances_pct=advances_pct,
-        fii_net_5d=fii_net_5d
-    )
+    # ── Regime (compute once per batch when possible) ──────────────────────────
+    if regime is None:
+        regime = determine_market_regime(
+            nifty_change=nifty_change,
+            vix=vix,
+            nifty_change_20d=nifty_change_20d,
+            advances_pct=advances_pct,
+            fii_net_5d=fii_net_5d,
+        )
 
     # ── Weight Selection: Regime-specific v2 > Global v2 > Regime static ──────
     adaptive = _get_adaptive_weights_sync()
@@ -145,18 +155,27 @@ def calculate_composite(
             weights = {"T": adaptive["T"], "F": adaptive["F"], "S": adaptive["S"]}
             weights_source = "adaptive_v1_global"
         else:
-            # No valid adaptive weights — use static regime defaults
             weights = _static_regime_weights(regime)
     else:
         weights = _static_regime_weights(regime)
 
+    # ── Normalize weights to guard against meta-learner drift ─────────────────
+    total_w = weights["T"] + weights["F"] + weights["S"]
+    if abs(total_w - 1.0) > 0.01:
+        logger.warning(f"[Ensemble] Weights sum to {total_w:.3f}, normalizing")
+        weights = {k: v / total_w for k, v in weights.items()}
+
     comp_score = (t_score * weights["T"]) + (f_score * weights["F"]) + (s_score * weights["S"])
     comp_score = round(comp_score, 2)
 
-    # Signal Thresholds
-    if comp_score >= 75:
+    # ── Signal Thresholds — regime-aware ──────────────────────────────────────
+    # In BEAR: raise the bar by +10 on buy-side thresholds so the model issues
+    # meaningfully fewer BUY/STRONG BUY signals during confirmed downtrends.
+    bear_offset = 10 if regime == "BEAR" else 0
+
+    if comp_score >= (75 + bear_offset):
         signal = "STRONG BUY"
-    elif comp_score >= 60:
+    elif comp_score >= (60 + bear_offset):
         signal = "BUY"
     elif comp_score >= 45:
         signal = "HOLD"
@@ -165,13 +184,24 @@ def calculate_composite(
     else:
         signal = "STRONG SELL"
 
-    # Confidence calculation: Are engines agreeing?
-    # Variance between the three scores. Lower variance = higher confidence.
-    max_diff = max(abs(t_score - f_score), abs(t_score - s_score), abs(f_score - s_score))
-    # Map max diff of 0-100 to confidence 100%-0%
-    confidence = max(0, min(100, 100 - max_diff))
-    
-    # Target and Stop Loss (Only for Buy/Strong Buy)
+    # ── Confidence — exclude missing engines from variance calc ───────────────
+    active_scores = [s for s, has in [(t_score, t_has_data), (f_score, f_has_data), (s_score, s_has_data)] if has]
+
+    if len(active_scores) >= 2:
+        pairs = [(active_scores[i], active_scores[j])
+                 for i in range(len(active_scores))
+                 for j in range(i + 1, len(active_scores))]
+        max_diff = max(abs(a - b) for a, b in pairs)
+        confidence = max(0, min(100, 100 - max_diff))
+        # Penalize missing data — cap confidence proportionally
+        if missing_engines > 0:
+            confidence = min(confidence, 100 - (missing_engines * 25))
+    elif len(active_scores) == 1:
+        confidence = 30   # single engine, no cross-check possible
+    else:
+        confidence = 20   # all engines missing
+
+    # ── Conviction-scaled Targets & Stop Loss ─────────────────────────────────
     targets = None
     targets_5d  = None
     targets_10d = None
@@ -179,62 +209,75 @@ def calculate_composite(
     targets_100d = None
     stop_loss = None
     rr_ratio = None
-    
+
     current_price = tech_data.get("close")
     atr = tech_data.get("atr")
 
     if current_price and atr and signal in ["BUY", "STRONG BUY"]:
-        # ATR-based Stop Loss — 1.5x ATR below entry (same for all horizons;
-        # you'd exit at SL regardless of whether it's a 5d or 100d trade)
-        stop_loss = round(current_price - (atr * 1.5), 2)
+        # Conviction multiplier: scales how far targets stretch with score.
+        # Score 60 → 1.0x  |  Score 75 → 1.225x  |  Score 92 → 1.48x (cap 1.6x)
+        conviction_mult = min(1.6, 1.0 + (max(0, comp_score - 60) * 0.015))
+
+        # Regime adjustment: in BEAR tighten stop (get out fast if wrong),
+        # tighten targets (don't project far in a downtrend).
+        regime_target_mult = {"BULL": 1.1, "SIDEWAYS": 1.0, "BEAR": 0.80}.get(regime, 1.0)
+        regime_stop_mult   = {"BULL": 1.7, "SIDEWAYS": 1.5, "BEAR": 1.2}.get(regime, 1.5)
+
+        # Effective multiplier for targets: conviction × regime
+        # Effective multiplier for stop: regime only (conviction doesn't widen your risk)
+        eff_target = conviction_mult * regime_target_mult
+
+        stop_loss = round(current_price - (atr * regime_stop_mult), 2)
 
         # 5-day targets — tighter: stock has 5 sessions to move
         targets_5d = {
-            "conservative": round(current_price + (atr * 0.75), 2),
-            "base":         round(current_price + (atr * 1.25), 2),
-            "aggressive":   round(current_price + (atr * 1.75), 2),
+            "conservative": round(current_price + (atr * 0.75 * eff_target), 2),
+            "base":         round(current_price + (atr * 1.25 * eff_target), 2),
+            "aggressive":   round(current_price + (atr * 1.75 * eff_target), 2),
         }
 
         # 10-day targets — wider: two weeks for the thesis to play out
         targets_10d = {
-            "conservative": round(current_price + (atr * 1.5), 2),
-            "base":         round(current_price + (atr * 2.5), 2),
-            "aggressive":   round(current_price + (atr * 3.5), 2),
+            "conservative": round(current_price + (atr * 1.5 * eff_target), 2),
+            "base":         round(current_price + (atr * 2.5 * eff_target), 2),
+            "aggressive":   round(current_price + (atr * 3.5 * eff_target), 2),
         }
 
         # 50-day targets — long-term: ~2.5 months, fundamentals drive returns
         targets_50d = {
-            "conservative": round(current_price + (atr * 4.0), 2),
-            "base":         round(current_price + (atr * 6.0), 2),
-            "aggressive":   round(current_price + (atr * 9.0), 2),
+            "conservative": round(current_price + (atr * 4.0 * eff_target), 2),
+            "base":         round(current_price + (atr * 6.0 * eff_target), 2),
+            "aggressive":   round(current_price + (atr * 9.0 * eff_target), 2),
         }
 
         # 100-day targets — very long-term: ~5 months, deep value / sector thesis
         targets_100d = {
-            "conservative": round(current_price + (atr * 6.0),  2),
-            "base":         round(current_price + (atr * 9.0),  2),
-            "aggressive":   round(current_price + (atr * 13.0), 2),
+            "conservative": round(current_price + (atr * 6.0  * eff_target), 2),
+            "base":         round(current_price + (atr * 9.0  * eff_target), 2),
+            "aggressive":   round(current_price + (atr * 13.0 * eff_target), 2),
         }
 
         # Default `targets` = 5d for backward compat with screener / watchlist cards
         targets = targets_5d
 
-        risk   = current_price - stop_loss          # ATR * 1.5
-        reward = targets_10d["base"] - current_price # ATR * 2.5
+        # RR is now per-stock: stop and reward use different multipliers (stop=regime,
+        # reward=conviction×regime) so they no longer cancel to a constant.
+        risk   = current_price - stop_loss                  # atr * regime_stop_mult
+        reward = targets_10d["base"] - current_price        # atr * 2.5 * eff_target
         rr_ratio = round(reward / risk, 2) if risk > 0 else 0
 
-    # Position Sizing
+    # ── Position Sizing ────────────────────────────────────────────────────────
     position_sizing = None
     if user_capital and user_capital > 0 and signal in ["BUY", "STRONG BUY"] and stop_loss and current_price:
         # Risk Model: Risk 1% to 2% of total capital per trade based on confidence
         risk_pct = 0.01 + (0.01 * (confidence / 100))
         capital_at_risk = user_capital * risk_pct
         risk_per_share = current_price - stop_loss
-        
+
         if risk_per_share > 0:
             qty = int(capital_at_risk / risk_per_share)
             invested_amount = qty * current_price
-            
+
             # Ensure we don't invest more than 20% of total capital in a single stock
             max_allocation = user_capital * 0.20
             if invested_amount > max_allocation:
@@ -265,8 +308,9 @@ def calculate_composite(
         "weights_used": weights,
         "weights_source": weights_source,
         "components": {
-            "technical": t_score,
+            "technical":   t_score,
             "fundamental": f_score,
-            "sentiment": s_score
+            "sentiment":   s_score,
+            "missing_engines": missing_engines,
         }
     }
