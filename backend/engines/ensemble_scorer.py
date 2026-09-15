@@ -165,7 +165,23 @@ def calculate_composite(
         logger.warning(f"[Ensemble] Weights sum to {total_w:.3f}, normalizing")
         weights = {k: v / total_w for k, v in weights.items()}
 
-    comp_score = (t_score * weights["T"]) + (f_score * weights["F"]) + (s_score * weights["S"])
+    # ── Composite Score — renormalize weights over engines that returned data ──
+    # Dropping missing engines and redistributing their weight prevents phantom
+    # 50s from dragging real signals toward the middle.
+    engine_weights = {
+        "T": weights["T"] if t_has_data else 0.0,
+        "F": weights["F"] if f_has_data else 0.0,
+        "S": weights["S"] if s_has_data else 0.0,
+    }
+    active_weight_sum = engine_weights["T"] + engine_weights["F"] + engine_weights["S"]
+    if active_weight_sum > 0.0:
+        # Renormalize so the available engines carry full weight
+        engine_weights = {k: v / active_weight_sum for k, v in engine_weights.items()}
+    else:
+        # All engines missing — fall back to defaults (confidence will be 20)
+        engine_weights = weights
+
+    comp_score = (t_score * engine_weights["T"]) + (f_score * engine_weights["F"]) + (s_score * engine_weights["S"])
     comp_score = round(comp_score, 2)
 
     # ── Signal Thresholds — regime-aware ──────────────────────────────────────
@@ -260,17 +276,27 @@ def calculate_composite(
         # Default `targets` = 5d for backward compat with screener / watchlist cards
         targets = targets_5d
 
-        # RR is now per-stock: stop and reward use different multipliers (stop=regime,
-        # reward=conviction×regime) so they no longer cancel to a constant.
-        risk   = current_price - stop_loss                  # atr * regime_stop_mult
-        reward = targets_10d["base"] - current_price        # atr * 2.5 * eff_target
-        rr_ratio = round(reward / risk, 2) if risk > 0 else 0
+        # RR: uses a convention 1.5×ATR base as the denominator (regime-neutral)
+        # so that BULL (wider targets) shows higher RR than BEAR (narrower targets)
+        # at equivalent conviction — not the inversion that happens when the
+        # regime-tightened stop is in the denominator.
+        # NOTE: this is still ATR-based; true per-stock RR would need resistance
+        # levels or realized-move percentiles as the reward input.
+        reward_rr = atr * 2.5 * eff_target   # conviction × regime target stretch
+        risk_rr   = atr * 1.5                 # convention base, regime-neutral
+        rr_ratio = round(reward_rr / risk_rr, 2) if risk_rr > 0 else 0
 
     # ── Position Sizing ────────────────────────────────────────────────────────
     position_sizing = None
     if user_capital and user_capital > 0 and signal in ["BUY", "STRONG BUY"] and stop_loss and current_price:
-        # Risk Model: Risk 1% to 2% of total capital per trade based on confidence
-        risk_pct = 0.01 + (0.01 * (confidence / 100))
+        # Regime scales down both risk% and max allocation in BEAR.
+        # Without this, a tighter BEAR stop shrinks risk_per_share (the denominator)
+        # and silently increases qty — exactly backwards from what a downtrend warrants.
+        regime_risk_mult = {"BULL": 1.0, "SIDEWAYS": 0.85, "BEAR": 0.60}.get(regime, 0.85)
+        regime_max_alloc = {"BULL": 0.20, "SIDEWAYS": 0.15, "BEAR": 0.10}.get(regime, 0.15)
+
+        # Risk Model: 1%–2% of capital per trade scaled by confidence, then by regime
+        risk_pct = (0.01 + 0.01 * (confidence / 100)) * regime_risk_mult
         capital_at_risk = user_capital * risk_pct
         risk_per_share = current_price - stop_loss
 
@@ -278,8 +304,8 @@ def calculate_composite(
             qty = int(capital_at_risk / risk_per_share)
             invested_amount = qty * current_price
 
-            # Ensure we don't invest more than 20% of total capital in a single stock
-            max_allocation = user_capital * 0.20
+            # Regime-specific max single-stock allocation
+            max_allocation = user_capital * regime_max_alloc
             if invested_amount > max_allocation:
                 qty = int(max_allocation / current_price)
                 invested_amount = qty * current_price
