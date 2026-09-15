@@ -40,6 +40,20 @@ SOLID_WIN_THRESHOLD  = 1.5   # P&L ≥ 1.5% → WIN even without hitting target
 TARGET_PROGRESS_WIN  = 0.80  # Reached ≥ 80% of target gap → WIN (NEAR_TARGET)
 PARTIAL_THRESHOLD    = 0.0   # P&L > 0 (above BREAKEVEN) → PARTIAL
 
+# ── Regime-specific WIN criteria overrides ───────────────────────────────────
+# In SIDEWAYS markets the index has no strong trend, so ATR-based targets are harder
+# to reach within 5 days. Lowering the bar from 1.5% to 1.0% and target progress from
+# 80% to 60% means a correct-direction move still counts as a WIN even if it doesn't
+# reach the full ATR target — more accurately reflecting directional skill.
+# In BULL markets raise the bar slightly: trending stocks routinely move 2%+ in a week
+# so a higher threshold keeps WIN meaningful.
+REGIME_WIN_OVERRIDES = {
+    # regime: (solid_win_pct, target_progress_win)
+    "BULL":     (2.0, 0.80),   # higher bar — bull runs support larger moves
+    "SIDEWAYS": (1.0, 0.60),   # lower bar  — no trend, targets are harder to reach
+    "BEAR":     (1.5, 0.80),   # unchanged  — bear bounces can be sharp
+}
+
 # ── Long-term override thresholds per check_day ──────────────────────────────
 # Gains of 1.5% over 50 days are irrelevant (could just be inflation)
 # A real long-term win needs more % move.
@@ -101,18 +115,22 @@ def _classify_outcome(
     stop_loss: float,
     target_conservative: float,
     price_at_check: float,
-    check_day: int = 5,          # ← NEW: drives horizon-aware thresholds
+    check_day: int = 5,
+    regime: str = "SIDEWAYS",   # regime-aware WIN thresholds
 ) -> tuple[str, str]:
     """
     Returns (outcome, outcome_detail).
     outcome: WIN / PARTIAL / LOSS / BREAKEVEN / OPEN
 
-    WIN       — hit ≥ 80% of target gap, or solid gain ≥ solid_win_pct
-    PARTIAL   — right direction but below WIN threshold
-    BREAKEVEN — within ±breakeven_pct (market noise, not scored)
-    LOSS      — wrong direction, or stop loss hit
+    WIN       -- hit >= solid_win_pct gain, or >= target_progress_win of target gap
+    PARTIAL   -- right direction but below WIN threshold
+    BREAKEVEN -- within +-breakeven_pct (market noise, not scored)
+    LOSS      -- wrong direction, or stop loss hit
 
-    Thresholds scale with horizon: D5=1.5% solid win, D50=5%, D100=8%.
+    Thresholds scale with horizon (D5/D10/D50/D100) AND with regime:
+      SIDEWAYS: solid_win=1.0%, target_progress=60% (ATR targets harder to hit flat)
+      BULL:     solid_win=2.0%, target_progress=80% (trending stocks move more)
+      BEAR:     solid_win=1.5%, target_progress=80% (unchanged)
     """
     if entry_price is None or entry_price == 0:
         return "OPEN", "NO_ENTRY_PRICE"
@@ -126,39 +144,48 @@ def _classify_outcome(
     is_buy_signal  = signal_upper in ("STRONG BUY", "BUY", "STRONG_BUY")
     is_sell_signal = signal_upper in ("STRONG SELL", "SELL", "STRONG_SELL")
 
-    # Horizon-specific thresholds
+    # Horizon-specific thresholds (long-term horizons need larger moves)
     bev_pct, solid_win_pct, partial_min_pct = HORIZON_THRESHOLDS.get(
         check_day, (BREAKEVEN_THRESHOLD, SOLID_WIN_THRESHOLD, PARTIAL_THRESHOLD)
     )
 
-    # ── BREAKEVEN: market barely moved — not scored in either direction ──────
+    # Regime override: apply SIDEWAYS / BULL / BEAR solid_win and target_progress
+    regime_solid_win, regime_target_progress = REGIME_WIN_OVERRIDES.get(
+        regime or "SIDEWAYS", (solid_win_pct, TARGET_PROGRESS_WIN)
+    )
+    # For long-term horizons (D50/D100) keep the horizon threshold as the floor
+    # so SIDEWAYS doesn't lower the bar below the horizon minimum
+    effective_solid_win = max(solid_win_pct, regime_solid_win) if check_day >= 50 else regime_solid_win
+    effective_target_progress = regime_target_progress
+
+    # -- BREAKEVEN: market barely moved -- not scored in either direction --------
     if abs(pnl_pct) < bev_pct:
         return "BREAKEVEN", "WITHIN_TOLERANCE"
 
     if is_buy_signal:
-        # SL hit first — full LOSS regardless of target
+        # SL hit first -- full LOSS regardless of target
         if stop_loss and price_at_check <= stop_loss:
             return "LOSS", "SL_HIT"
 
         if pnl_pct > 0:
-            # Check target progress
+            # Check target progress using regime-adjusted progress threshold
             if target_conservative and target_conservative > entry_price:
                 target_gap   = target_conservative - entry_price
                 actual_gain  = price_at_check - entry_price
-                progress_pct = actual_gain / target_gap  # 0–1+ ratio
+                progress_pct = actual_gain / target_gap
 
                 if progress_pct >= 1.0:
-                    return "WIN", "TARGET_HIT"     # hit or exceeded target
-                elif progress_pct >= TARGET_PROGRESS_WIN:
-                    return "WIN", "NEAR_TARGET"    # ≥ 80% of the way — counts as WIN
+                    return "WIN", "TARGET_HIT"
+                elif progress_pct >= effective_target_progress:
+                    return "WIN", "NEAR_TARGET"
 
-            # No target data or below 80% progress:
-            if pnl_pct >= solid_win_pct:
-                return "WIN", "SOLID_GAIN"         # strong move even without target
+            # Regime-adjusted solid win threshold
+            if pnl_pct >= effective_solid_win:
+                return "WIN", "SOLID_GAIN"
             elif pnl_pct >= partial_min_pct:
-                return "PARTIAL", "PARTIAL_GAIN"  # right direction but weak
+                return "PARTIAL", "PARTIAL_GAIN"
             else:
-                return "LOSS", "PARTIAL_LOSS"      # above BREAKEVEN but below partial
+                return "LOSS", "PARTIAL_LOSS"
         else:
             return "LOSS", "PARTIAL_LOSS"
 
@@ -307,12 +334,13 @@ async def run_outcome_check():
                         t_conservative = t_base = t_aggressive = 0.0
 
                 outcome, detail = _classify_outcome(
-                    signal             = score.signal or "HOLD",
-                    entry_price        = entry_price,
-                    stop_loss          = score.stop_loss or 0.0,
-                    target_conservative= t_conservative,
-                    price_at_check     = price,
-                    check_day          = check_day,   # ← horizon-aware thresholds
+                    signal              = score.signal or "HOLD",
+                    entry_price         = entry_price,
+                    stop_loss           = score.stop_loss or 0.0,
+                    target_conservative = t_conservative,
+                    price_at_check      = price,
+                    check_day           = check_day,
+                    regime              = getattr(score, "regime", None) or "SIDEWAYS",
                 )
 
                 if existing_row:

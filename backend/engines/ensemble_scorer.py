@@ -184,14 +184,16 @@ def calculate_composite(
     comp_score = (t_score * engine_weights["T"]) + (f_score * engine_weights["F"]) + (s_score * engine_weights["S"])
     comp_score = round(comp_score, 2)
 
-    # ── Signal Thresholds — regime-aware ──────────────────────────────────────
-    # In BEAR: raise the bar by +10 on buy-side thresholds so the model issues
-    # meaningfully fewer BUY/STRONG BUY signals during confirmed downtrends.
-    bear_offset = 10 if regime == "BEAR" else 0
+    # -- Signal Thresholds -- regime-aware -------------------------------------------
+    # BEAR:     +10 offset -- fewer false BUYs in confirmed downtrends
+    # SIDEWAYS: +5  offset -- reduce marginal signals; data shows 60-65 band has
+    #                         flat 27.2% win rate, barely below the 65-70 band (28.5%)
+    # BULL:      0  offset -- standard thresholds
+    regime_offset = {"BEAR": 10, "SIDEWAYS": 5, "BULL": 0}.get(regime, 0)
 
-    if comp_score >= (75 + bear_offset):
+    if comp_score >= (75 + regime_offset):
         signal = "STRONG BUY"
-    elif comp_score >= (60 + bear_offset):
+    elif comp_score >= (60 + regime_offset):
         signal = "BUY"
     elif comp_score >= 45:
         signal = "HOLD"
