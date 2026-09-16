@@ -769,13 +769,23 @@ def setup_scheduler():
         replace_existing=True,
     )
 
+    # FII/DII: primary at 6:30 PM (NSE publishes ~5:30-6 PM after market close).
+    # Retry at 8:00 PM catches late publications and session failures at 6:30 PM.
+    # No next_run_time=now — startup runs before market close, NSE returns old data
+    # which then blocks the real refresh via the "already in DB" skip guard.
     scheduler.add_job(
         job_refresh_fii_dii,
         trigger=CronTrigger(hour=18, minute=30, timezone=IST),
         id="fii_dii",
-        name="FII/DII Data Refresh",
+        name="FII/DII Data Refresh (primary)",
         replace_existing=True,
-        next_run_time=now
+    )
+    scheduler.add_job(
+        job_refresh_fii_dii,
+        trigger=CronTrigger(hour=20, minute=0, timezone=IST),
+        id="fii_dii_retry",
+        name="FII/DII Data Refresh (retry)",
+        replace_existing=True,
     )
 
     # Daily 9 AM IST: Earnings calendar
