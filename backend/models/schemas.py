@@ -1,6 +1,11 @@
 """
 ATBot — SQLAlchemy Database Models
 All tables for storing market data, scores, news, watchlist & trade journal
+
+v4 (PATCH):
+  - AnalysisScore gains shadow_signal, kill_switch_active, trend_score,
+    reversion_score, adx (SIDEWAYS shadow tracking)
+  - SignalOutcome gains is_shadow (0 = visible, 1 = shadow)
 """
 
 from datetime import datetime
@@ -118,6 +123,18 @@ class AnalysisScore(Base):
 
     # Market regime at time of analysis (Meta-Learner v2)
     regime = Column(String(10), nullable=True)   # BULL / BEAR / SIDEWAYS
+
+    # ── v4: shadow signal tracking ────────────────────────────────────────
+    # When the SIDEWAYS kill switch forces HOLD, the composite may still have
+    # produced a BUY/SELL. We store that as shadow_signal so the outcome
+    # tracker can evaluate the would-be trade in parallel — without risking
+    # capital — and we accumulate real performance evidence for the new
+    # reversion-engine logic.
+    shadow_signal      = Column(String(15), nullable=True)   # pre-override signal
+    kill_switch_active = Column(Integer, nullable=True, default=0)  # 0/1
+    trend_score        = Column(Float, nullable=True)        # raw trend sub-score
+    reversion_score    = Column(Float, nullable=True)        # raw reversion sub-score
+    adx                = Column(Float, nullable=True)        # ADX at scan time
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -244,6 +261,7 @@ class UserSettings(Base):
     screener_default_universe = Column(String(20), default='nifty50')
     screener_default_sort = Column(String(20), default='score')
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
     # Meta-learner v1: single global adaptive weights (None = not yet learned)
     meta_weight_technical   = Column(Float, nullable=True)
     meta_weight_fundamental = Column(Float, nullable=True)
@@ -299,5 +317,13 @@ class SignalOutcome(Base):
     outcome = Column(String(20), index=True)  # WIN / LOSS / BREAKEVEN / OPEN
     outcome_detail = Column(String(50))       # e.g. TARGET_HIT / SL_HIT / PARTIAL
     regime = Column(String(10), nullable=True)  # Market regime at signal time (v2)
+
+    # ── v4: shadow flag ──────────────────────────────────────────────────
+    # 0 = evaluated from the visible signal (normal case)
+    # 1 = evaluated from a shadow signal (kill switch was active; this row
+    #     is counterfactual evidence and does NOT feed the kill-switch
+    #     win-rate calculation — see outcome_tracker.refresh_sideways_win_rate)
+    is_shadow = Column(Integer, nullable=True, default=0)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     __table_args__ = (UniqueConstraint('analysis_score_id', 'check_day', name='uq_outcome_score_day'),)

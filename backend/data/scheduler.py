@@ -409,6 +409,12 @@ async def job_daily_screener():
                     dominant_pattern=tech_result.get("trend"),
                     atr_14=tech_result.get("atr"),
                     regime=today_regime,
+                    # v4: shadow signal tracking
+                    shadow_signal=final.get("shadow_signal"),
+                    kill_switch_active=1 if final.get("kill_switch_active") else 0,
+                    trend_score=tech_result.get("trend_score"),
+                    reversion_score=tech_result.get("reversion_score"),
+                    adx=tech_result.get("adx"),
                 )
                 async with AsyncSessionLocal() as db:
                     db.add(record)

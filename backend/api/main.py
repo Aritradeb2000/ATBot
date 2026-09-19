@@ -32,10 +32,10 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Lifecycle events: Startup and Shutdown."""
     logger.info(f"🚀 Starting {settings.app_name} v{settings.app_version}...")
-    
+
     # 1. Initialize Database
     await init_db()
-    
+
     # 2. Start Background Scheduler
     scheduler = setup_scheduler()
     scheduler.start()
@@ -57,6 +57,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Could not load adaptive weights: {e}")
 
+    # 4b. Bootstrap the SIDEWAYS kill switch IN-PROCESS.
+    # Without this, _sideways_kill_state stays empty after every server
+    # restart, and the switch remains dormant until the 6:30 PM outcome
+    # tracker job runs. Running the bootstrap here ensures the switch is
+    # armed the moment the app is ready to serve requests.
+    try:
+        from backend.engines.outcome_tracker import refresh_sideways_win_rate
+        from backend.engines.ensemble_scorer import set_sideways_win_rate
+        wr, n = await refresh_sideways_win_rate(days=30)
+        set_sideways_win_rate(wr, n)
+        logger.info(f"🛑 [Startup] Kill switch bootstrapped: win_rate={wr}, n={n}")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not bootstrap kill switch: {e}")
+
     logger.info("✅ Cache warm — ready to serve!")
 
     # 5. Catch-up missed jobs (outcome check, report, precompute) if server
@@ -64,12 +78,13 @@ async def lifespan(app: FastAPI):
     #    is not blocked. Logs appear in console ~a few seconds later.
     import asyncio
     asyncio.create_task(startup_catchup())
-    
+
     yield  # Application runs while yielded
-    
+
     # Shutdown
     logger.info("🛑 Shutting down...")
     scheduler.shutdown()
+
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -96,6 +111,7 @@ app.include_router(settings_router.router, prefix="/api")
 app.include_router(learn.router, prefix="/api")
 app.include_router(optimizer.router, prefix="/api")
 app.include_router(ws_router)
+
 
 @app.get("/health")
 async def health_check():

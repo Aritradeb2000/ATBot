@@ -95,7 +95,13 @@ async def get_full_analysis(symbol: str, capital: Optional[float] = None, db: As
             stop_loss=final_result.get("stop_loss"),
             active_signals=json.dumps(tech_result.get("signals", [])),
             dominant_pattern=tech_result.get("trend"),
-            atr_14=tech_result.get("atr")
+            atr_14=tech_result.get("atr"),
+            # v4: shadow signal tracking
+            shadow_signal=final_result.get("shadow_signal"),
+            kill_switch_active=1 if final_result.get("kill_switch_active") else 0,
+            trend_score=tech_result.get("trend_score"),
+            reversion_score=tech_result.get("reversion_score"),
+            adx=tech_result.get("adx")
         )
         db.add(score_record)
         await db.commit()
