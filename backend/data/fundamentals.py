@@ -155,6 +155,30 @@ def fetch_fundamentals_fmp(symbol: str) -> Optional[dict]:
 
 # ── Sector Comparison ─────────────────────────────────────────────────────
 
+
+# -- Public entry point -------------------------------------------------------
+# Use fetch_fundamentals() instead of calling yfinance/FMP helpers directly.
+# FMP data supplements yfinance: fills None fields, never overwrites real values.
+
+def fetch_fundamentals(symbol: str):
+    """
+    Fetch fundamentals via yfinance (primary) + FMP (supplemental).
+    symbol: NSE format e.g. 'RELIANCE.NS'
+    """
+    data = fetch_fundamentals_yfinance(symbol)
+    if data is None:
+        return None
+
+    fmp_data = fetch_fundamentals_fmp(symbol)
+    if fmp_data:
+        for key, val in fmp_data.items():
+            if data.get(key) is None and val is not None:
+                data[key] = val
+        logger.info(f"FMP supplemented {symbol}: {list(fmp_data.keys())}")
+
+    return data
+
+
 def get_sector_pe_median(sector: str, symbols: list[str]) -> Optional[float]:
     """
     Calculate median P/E for a sector from a list of symbols.

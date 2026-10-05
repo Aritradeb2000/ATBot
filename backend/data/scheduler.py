@@ -20,8 +20,8 @@ from backend.data.market_data import (
     fetch_global_cues, is_market_open
 )
 from backend.data.nse_live import get_fii_dii_data, get_market_breadth, get_india_vix
-from backend.data.news_feed import fetch_all_rss_feeds
-from backend.data.fundamentals import fetch_fundamentals_yfinance, get_upcoming_earnings
+from backend.data.news_feed import fetch_newsapi_news, fetch_all_rss_feeds
+from backend.data.fundamentals import fetch_fundamentals, get_upcoming_earnings
 from backend.engines.outcome_tracker import run_outcome_check
 from backend.engines.meta_learner import compute_and_save_adaptive_weights, get_current_adaptive_weights
 from backend.engines.ensemble_scorer import set_adaptive_weights
@@ -133,7 +133,7 @@ async def job_refresh_fundamentals():
     count = 0
     for symbol in NIFTY50_SYMBOLS:
         try:
-            data = fetch_fundamentals_yfinance(symbol)
+            data = fetch_fundamentals(symbol)
             if data:
                 _cache["fundamentals"][symbol] = data
                 count += 1
@@ -326,7 +326,7 @@ async def job_daily_screener():
     try:
         import asyncio
         from backend.data.market_data import fetch_ohlcv
-        from backend.data.fundamentals import fetch_fundamentals_yfinance
+        from backend.data.fundamentals import fetch_fundamentals
         from backend.data.news_feed import fetch_finnhub_news
         from backend.engines.technical_engine import analyze_technical
         from backend.engines.fundamental_engine import analyze_fundamental
@@ -373,7 +373,7 @@ async def job_daily_screener():
                 ohlcv_df     = await loop.run_in_executor(None, lambda: fetch_ohlcv(symbol, interval="1d", period="6mo"))
                 if ohlcv_df is None or ohlcv_df.empty:
                     return
-                fundamentals = await loop.run_in_executor(None, lambda: fetch_fundamentals_yfinance(symbol))
+                fundamentals = await loop.run_in_executor(None, lambda: fetch_fundamentals(symbol))
                 news         = await loop.run_in_executor(None, lambda: fetch_finnhub_news(symbol))
 
                 tech_result  = analyze_technical(ohlcv_df)
@@ -449,7 +449,7 @@ async def job_nightly_precompute(universe_name: str = "nifty200"):
     """
     from backend.data.nse_universe import get_universe
     from backend.data.market_data import fetch_ohlcv
-    from backend.data.fundamentals import fetch_fundamentals_yfinance
+    from backend.data.fundamentals import fetch_fundamentals
     from backend.data.news_feed import fetch_finnhub_news
     from backend.engines.technical_engine import analyze_technical
     from backend.engines.fundamental_engine import analyze_fundamental
@@ -514,7 +514,7 @@ async def job_nightly_precompute(universe_name: str = "nifty200"):
                 skipped += 1
                 return
 
-            fundamentals = await loop.run_in_executor(None, lambda: fetch_fundamentals_yfinance(symbol))
+            fundamentals = await loop.run_in_executor(None, lambda: fetch_fundamentals(symbol))
             news         = await loop.run_in_executor(None, lambda: fetch_finnhub_news(symbol))
 
             tech_result  = analyze_technical(ohlcv_df)
