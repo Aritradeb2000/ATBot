@@ -49,7 +49,9 @@ def analyze_sentiment(articles: list[dict], fii_dii: dict = None) -> dict:
         valid_articles = 0
         
         for idx, article in enumerate(articles[:10]):
-            text = article.get("headline", "")
+            headline = article.get("headline", "")
+            summary = article.get("summary", "")
+            text = f"{headline}. {summary}".strip(" .")
             if not text: continue
                 
             try:
