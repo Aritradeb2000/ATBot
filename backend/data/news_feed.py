@@ -17,96 +17,120 @@ from backend.config import settings, NEWS_RSS_FEEDS, IST
 logger = logging.getLogger(__name__)
 
 
-# ── RSS Feed Parser ────────────────────────────────────────────────────────
+
+# ── RSS Feed Parser ───────────────────────────────────────────────────────
+
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+_feed_cache = {}  # Store etag/modified per feed
 
 def fetch_rss_feed(feed_name: str, feed_url: str) -> list[dict]:
-    """
-    Fetch and parse a single RSS feed.
-    Returns list of news articles as dicts.
-    """
     articles = []
     try:
-        feed = feedparser.parse(feed_url)
+        headers = {"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/xml, text/xml"}
+        # Polite polling headers
+        cache = _feed_cache.get(feed_name, {})
+        if "etag" in cache: headers["If-None-Match"] = cache["etag"]
+        if "modified" in cache: headers["If-Modified-Since"] = cache["modified"]
+
+        resp = requests.get(feed_url, headers=headers, timeout=10)
+        if resp.status_code == 304:
+            logger.info(f"[{feed_name}] Not modified since last fetch")
+            return []
+            
+        if resp.status_code != 200:
+            logger.warning(f"[{feed_name}] Returned {resp.status_code}")
+            return []
+            
+        # Update cache headers
+        _feed_cache[feed_name] = {
+            "etag": resp.headers.get("etag"),
+            "modified": resp.headers.get("last-modified")
+        }
+
+        import feedparser
+        feed = feedparser.parse(resp.content)
+        
+        # Recency window (e.g. 7 days max for market feeds)
+        from datetime import datetime, timedelta, timezone
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=7)
 
         for entry in feed.entries:
-            # Parse publish time
             published_at = _parse_feed_date(entry)
+            if published_at < cutoff_date:
+                continue
 
-            # Generate URL hash as unique ID (avoids duplicates)
             url = entry.get("link", "")
             url_hash = hashlib.md5(url.encode()).hexdigest()
+            headline = _clean_text(entry.get("title", ""))
+            
+            if headline:
+                articles.append({
+                    "id": url_hash,
+                    "headline": headline,
+                    "summary": _clean_text(entry.get("summary", entry.get("description", ""))),
+                    "url": url,
+                    "source": feed_name,
+                    "published_at": published_at,
+                    "symbol": None,
+                })
 
-            article = {
-                "id": url_hash,
-                "headline": _clean_text(entry.get("title", "")),
-                "summary": _clean_text(entry.get("summary", entry.get("description", ""))),
-                "url": url,
-                "source": feed_name,
-                "published_at": published_at,
-                "symbol": None,   # Will be matched to symbol later
-            }
-
-            if article["headline"]:
-                articles.append(article)
-
-        logger.info(f"📰 [{feed_name}] Fetched {len(articles)} articles")
+        logger.info(f"[{feed_name}] Fetched {len(articles)} fresh articles")
 
     except Exception as e:
         logger.error(f"RSS fetch failed for {feed_name}: {e}")
 
     return articles
 
-
 def fetch_all_rss_feeds() -> list[dict]:
-    """
-    Fetch all configured RSS feeds.
-    Returns combined, deduplicated list of articles.
-    """
     all_articles = []
     seen_ids = set()
+    seen_headlines = set()  # Dedup exact identical headlines across feeds
 
     for feed_name, feed_url in NEWS_RSS_FEEDS.items():
         articles = fetch_rss_feed(feed_name, feed_url)
         for article in articles:
-            if article["id"] not in seen_ids:
+            # Dedupe logic
+            h_norm = article["headline"].lower()
+            if article["id"] not in seen_ids and h_norm not in seen_headlines:
                 seen_ids.add(article["id"])
+                seen_headlines.add(h_norm)
                 all_articles.append(article)
-        time.sleep(0.5)   # Polite delay between feeds
+        import time
+        time.sleep(1.0)   # Polite delay
 
-    # Sort by published date (newest first)
     all_articles.sort(
         key=lambda x: x["published_at"] or datetime.min.replace(tzinfo=timezone.utc),
         reverse=True
     )
-
-    logger.info(f"📰 Total articles fetched: {len(all_articles)}")
+    logger.info(f"Total articles fetched: {len(all_articles)}")
     return all_articles
-
-
-# ── Finnhub News ──────────────────────────────────────────────────────────
-
-
 
 def fetch_fallback_news(symbol: str, max_articles: int = 25) -> list[dict]:
     """Fallback: fetch company-specific news via Google News RSS when primary APIs fail."""
     import feedparser
     from urllib.parse import quote_plus
+    import requests
+    import hashlib
     
     try:
-        # Strip '.NS' or '.BO' to get plain company name/symbol for better search results
+        # Use company name rather than ticker, quoted for multi-word
+        # e.g., "Reliance Industries" when:1d
         plain_symbol = symbol.replace('.NS', '').replace('.BO', '')
-        query = quote_plus(f"{plain_symbol} NSE stock news")
+        # Quoting it prevents false matches.
+        query = quote_plus(f'"{plain_symbol}" when:1d')
         url = f"https://news.google.com/rss/search?q={query}&hl=en-IN&gl=IN&ceid=IN:en"
         
-        feed = feedparser.parse(url)
+        headers = {"User-Agent": USER_AGENT}
+        resp = requests.get(url, headers=headers, timeout=10)
+        feed = feedparser.parse(resp.content)
+        
         if not feed.entries:
             return []
             
         articles = []
         for entry in feed.entries:
             url_str = entry.get("link", "")
-            if not url_str:
-                continue
+            if not url_str: continue
                 
             url_hash = hashlib.md5(url_str.encode()).hexdigest()
             published_at = _parse_feed_date(entry)
@@ -127,7 +151,6 @@ def fetch_fallback_news(symbol: str, max_articles: int = 25) -> list[dict]:
     except Exception as e:
         logger.error(f"Google News fallback failed for {symbol}: {e}")
         return []
-
 
 def fetch_finnhub_news(symbol: str, days_back: int = 365, max_articles: int = 25) -> list[dict]:
     """
@@ -192,91 +215,18 @@ def fetch_finnhub_news(symbol: str, days_back: int = 365, max_articles: int = 25
 
 # -- NewsAPI ------------------------------------------------------------------
 # Free tier: 100 req/day.  Use broad market queries (not per-stock) so we stay
-# within the limit.  Articles are attributed to stocks by match_articles_to_symbols.
 
-NEWSAPI_BASE = "https://newsapi.org/v2/everything"
+# ── Symbol Matching ───────────────────────────────────────────────────────
 
-NEWSAPI_QUERIES = [
-    "NSE OR BSE OR Nifty OR Sensex",
-    "India stock market OR Indian equities",
-    "RBI monetary policy OR India inflation",
-    "FII DII India investment",
-]
-
-def fetch_newsapi_news(max_articles: int = 50) -> list:
-    """
-    Fetch market-wide Indian business news from NewsAPI.
-    Uses broad queries to stay within the 100 req/day free limit.
-    """
-    if not settings.newsapi_key:
-        logger.info("NewsAPI key missing, skipping")
-        return []
-
-    import time as _time
-    from datetime import date, timedelta
-    from_date = (date.today() - timedelta(days=3)).isoformat()
-
-    all_articles = []
-    seen_ids = set()
-
-    for query in NEWSAPI_QUERIES:
-        try:
-            resp = requests.get(
-                NEWSAPI_BASE,
-                params={
-                    "q":        query,
-                    "from":     from_date,
-                    "language": "en",
-                    "sortBy":   "publishedAt",
-                    "pageSize": 20,
-                    "apiKey":   settings.newsapi_key,
-                },
-                timeout=10,
-            )
-            resp.raise_for_status()
-            for item in resp.json().get("articles", []):
-                url_str = item.get("url", "")
-                if not url_str:
-                    continue
-                uid = hashlib.md5(url_str.encode()).hexdigest()
-                if uid in seen_ids:
-                    continue
-                seen_ids.add(uid)
-                try:
-                    pub = datetime.fromisoformat(
-                        item.get("publishedAt", "").replace("Z", "+00:00")
-                    )
-                except Exception:
-                    pub = datetime.now(timezone.utc)
-                all_articles.append({
-                    "id":           uid,
-                    "headline":     _clean_text(item.get("title", "")),
-                    "summary":      _clean_text(item.get("description") or item.get("content", "")),
-                    "url":          url_str,
-                    "source":       (item.get("source") or {}).get("name", "NewsAPI"),
-                    "published_at": pub,
-                    "symbol":       None,
-                })
-            _time.sleep(0.3)
-        except Exception as e:
-            logger.error(f"NewsAPI query '{query}' failed: {e}")
-
-    all_articles.sort(key=lambda x: x["published_at"], reverse=True)
-    result = all_articles[:max_articles]
-    logger.info(f"NewsAPI: {len(result)} articles from {len(NEWSAPI_QUERIES)} queries")
-    return result
-
+import re
 
 def match_articles_to_symbols(
     articles: list[dict],
     symbols: list[str],
-    company_names: dict[str, str]  # {symbol: company_name}
+    company_names: dict[str, str]
 ) -> list[dict]:
     """
-    Match market-wide news articles to specific symbols by scanning
-    headline + summary for ticker/company name mentions.
-
-    company_names: e.g. {"RELIANCE.NS": "Reliance Industries"}
+    Match market-wide news articles to specific symbols using regex word boundaries.
     """
     for article in articles:
         text = (article["headline"] + " " + (article["summary"] or "")).lower()
@@ -284,15 +234,19 @@ def match_articles_to_symbols(
         for symbol in symbols:
             plain = symbol.replace(".NS", "").replace(".BO", "").lower()
             company = company_names.get(symbol, "").lower()
-
-            if plain in text or (company and len(company) > 4 and company in text):
+            
+            # Avoid false positives for short tickers (like ITC, TCS)
+            # Use word boundaries  to ensure we match the whole word
+            pattern_plain = r'\b' + re.escape(plain) + r'\b'
+            pattern_company = r'\b' + re.escape(company) + r'\b' if company and len(company) > 3 else None
+            
+            if re.search(pattern_plain, text) or (pattern_company and re.search(pattern_company, text)):
                 article["symbol"] = symbol
-                break   # Match to first found symbol
+                break
 
     return articles
 
-
-# ── Utilities ─────────────────────────────────────────────────────────────
+# ── Utilities ──────────────────────────────────────────────────────────
 
 def _parse_feed_date(entry) -> Optional[datetime]:
     """Parse publish date from feed entry."""
