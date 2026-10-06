@@ -97,7 +97,7 @@ class MetaLearnerConfig:
     score_full_opinion: float = 25.0
     base_weights: Dict[str, Dict[str, float]] = field(default_factory=lambda: {
         "BULL":     {"T": 0.55, "F": 0.25, "S": 0.20},
-        "BEAR":     {"T": 0.35, "F": 0.40, "S": 0.25},
+        "BEAR":     {"T": 0.50, "F": 0.25, "S": 0.25},
         "SIDEWAYS": {"T": 0.45, "F": 0.30, "S": 0.25},
     })
 

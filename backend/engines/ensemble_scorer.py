@@ -168,6 +168,11 @@ def calculate_composite(
 
     t_score = t_raw if t_raw is not None else 50
     f_score = fund_data.get("score", 50)
+    
+    # 📉 BEAR MARKET: Non-linear Fundamental Suppression
+    # Do not let high fundamentals overpower a weak technical downtrend.
+    if regime == "BEAR" and t_score < 50:
+        f_score = min(f_score, 50.0)
     s_score = sent_data.get("score", 50)
 
     # ── Weights ──────────────────────────────────────────────────────────────
