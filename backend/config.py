@@ -107,12 +107,8 @@ SIGNAL_THRESHOLDS = {
 NEWS_RSS_FEEDS = {
     "economic_times_markets": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
     "economic_times_stocks": "https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms",
-    "moneycontrol_news": "https://www.moneycontrol.com/rss/latestnews.xml",
     "livemint_markets": "https://www.livemint.com/rss/markets",
     "business_standard": "https://www.business-standard.com/rss/markets-106.rss",
-    "financial_express": "https://www.financialexpress.com/market/feed/",
     "business_line": "https://www.thehindubusinessline.com/markets/feeder/default.rss",
-    "bse_announcements": "https://www.bseindia.com/data/xml/corpannouncement.xml",
-    "rbi_press": "https://rbi.org.in/rss/PR.xml",
     "sebi_press": "https://www.sebi.gov.in/sebirss.xml",
 }
