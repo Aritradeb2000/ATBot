@@ -269,3 +269,130 @@ def _clean_text(text: str) -> str:
     text = re.sub(r"&[a-z]+;", " ", text)          # Remove HTML entities
     text = re.sub(r"\s+", " ", text).strip()        # Normalize whitespace
     return text[:1000]                              # Cap at 1000 chars
+
+
+# -- NewsAPI ------------------------------------------------------------------
+# Free tier: 100 req/day.  Use broad market queries (not per-stock) so we stay
+# within the limit.  Articles are attributed to stocks by match_articles_to_symbols.
+
+NEWSAPI_BASE = "https://newsapi.org/v2/everything"
+
+NEWSAPI_QUERIES = [
+    "NSE OR BSE OR Nifty OR Sensex",
+    "India stock market OR Indian equities",
+    "RBI monetary policy OR India inflation",
+    "FII DII India investment",
+]
+
+def fetch_newsapi_news(max_articles: int = 50) -> list:
+    """
+    Fetch market-wide Indian business news from NewsAPI.
+    Uses broad queries to stay within the 100 req/day free limit.
+    """
+    if not settings.newsapi_key:
+        logger.info("NewsAPI key missing, skipping")
+        return []
+
+    import time as _time
+    from datetime import date, timedelta
+    from_date = (date.today() - timedelta(days=3)).isoformat()
+
+    all_articles = []
+    seen_ids = set()
+
+    for query in NEWSAPI_QUERIES:
+        try:
+            resp = requests.get(
+                NEWSAPI_BASE,
+                params={
+                    "q":        query,
+                    "from":     from_date,
+                    "language": "en",
+                    "sortBy":   "publishedAt",
+                    "pageSize": 20,
+                    "apiKey":   settings.newsapi_key,
+                },
+                timeout=10,
+            )
+            resp.raise_for_status()
+            for item in resp.json().get("articles", []):
+                url_str = item.get("url", "")
+                if not url_str:
+                    continue
+                uid = hashlib.md5(url_str.encode()).hexdigest()
+                if uid in seen_ids:
+                    continue
+                seen_ids.add(uid)
+                try:
+                    pub = datetime.fromisoformat(
+                        item.get("publishedAt", "").replace("Z", "+00:00")
+                    )
+                except Exception:
+                    pub = datetime.now(timezone.utc)
+                all_articles.append({
+                    "id":           uid,
+                    "headline":     _clean_text(item.get("title", "")),
+                    "summary":      _clean_text(item.get("description") or item.get("content", "")),
+                    "url":          url_str,
+                    "source":       (item.get("source") or {}).get("name", "NewsAPI"),
+                    "published_at": pub,
+                    "symbol":       None,
+                })
+            _time.sleep(0.3)
+        except Exception as e:
+            logger.error(f"NewsAPI query '{query}' failed: {e}")
+
+    all_articles.sort(key=lambda x: x["published_at"], reverse=True)
+    result = all_articles[:max_articles]
+    logger.info(f"NewsAPI: {len(result)} articles from {len(NEWSAPI_QUERIES)} queries")
+    return result
+
+
+def match_articles_to_symbols(
+    articles: list[dict],
+    symbols: list[str],
+    company_names: dict[str, str]  # {symbol: company_name}
+) -> list[dict]:
+    """
+    Match market-wide news articles to specific symbols by scanning
+    headline + summary for ticker/company name mentions.
+
+    company_names: e.g. {"RELIANCE.NS": "Reliance Industries"}
+    """
+    for article in articles:
+        text = (article["headline"] + " " + (article["summary"] or "")).lower()
+
+        for symbol in symbols:
+            plain = symbol.replace(".NS", "").replace(".BO", "").lower()
+            company = company_names.get(symbol, "").lower()
+
+            if plain in text or (company and len(company) > 4 and company in text):
+                article["symbol"] = symbol
+                break   # Match to first found symbol
+
+    return articles
+
+
+# ── Utilities ─────────────────────────────────────────────────────────────
+
+def _parse_feed_date(entry) -> Optional[datetime]:
+    """Parse publish date from feed entry."""
+    try:
+        if hasattr(entry, "published_parsed") and entry.published_parsed:
+            return datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+        elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
+            return datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
+    except Exception:
+        pass
+    return datetime.now(timezone.utc)
+
+
+def _clean_text(text: str) -> str:
+    """Strip HTML tags and excessive whitespace from text."""
+    if not text:
+        return ""
+    import re
+    text = re.sub(r"<[^>]+>", " ", text)          # Remove HTML tags
+    text = re.sub(r"&[a-z]+;", " ", text)          # Remove HTML entities
+    text = re.sub(r"\s+", " ", text).strip()        # Normalize whitespace
+    return text[:1000]                              # Cap at 1000 chars
