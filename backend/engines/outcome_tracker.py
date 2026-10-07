@@ -72,11 +72,64 @@ def _pick_tracked_signal(score) -> tuple[str, int]:
     return visible or "HOLD", 0
 
 
-def _fetch_close_price(symbol: str, target_date: date) -> Optional[float]:
+
+def _evaluate_trailing_stop(symbol: str, entry_date, check_day: int, entry_price: float, stop_loss: float, target_conservative: float, is_buy: bool):
+    import yfinance as yf
+    from datetime import timedelta
+    try:
+        ticker = yf.Ticker(symbol)
+        start = entry_date
+        end = entry_date + timedelta(days=check_day + 10)
+        hist = ticker.history(start=start.isoformat(), end=end.isoformat(), interval="1d")
+        
+        hist = hist[hist.index.date > entry_date]
+        hist = hist.head(check_day)
+        
+        if hist.empty:
+            return None, None, None, None, None
+
+        current_stop = stop_loss
+        for idx, row in hist.iterrows():
+            high = row["High"]
+            low = row["Low"]
+            close = row["Close"]
+            
+            if is_buy:
+                if low <= current_stop:
+                    exit_price = min(row["Open"], current_stop)
+                    pnl_amt = exit_price - entry_price
+                    pnl_pct = (pnl_amt / entry_price) * 100
+                    return ("WIN" if pnl_pct > 0 else "LOSS"), pnl_pct, pnl_amt, idx, exit_price
+                
+                if target_conservative and high >= target_conservative:
+                    current_stop = max(current_stop, entry_price)
+            else:
+                if high >= current_stop:
+                    exit_price = max(row["Open"], current_stop)
+                    pnl_amt = entry_price - exit_price
+                    pnl_pct = (pnl_amt / entry_price) * 100
+                    return ("WIN" if pnl_pct > 0 else "LOSS"), pnl_pct, pnl_amt, idx, exit_price
+                
+                if target_conservative and low <= target_conservative:
+                    current_stop = min(current_stop, entry_price)
+                    
+        last_date = hist.index[-1]
+        last_close = float(hist["Close"].iloc[-1])
+        pnl_amt = (last_close - entry_price) if is_buy else (entry_price - last_close)
+        pnl_pct = (pnl_amt / entry_price) * 100
+        return ("WIN" if pnl_pct > 0 else "LOSS"), pnl_pct, pnl_amt, last_date, last_close
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Trailing stop eval failed for {symbol}: {e}")
+        return None, None, None, None, None
+
+def _fetch_close_price(symbol: str, target_date):
+
     try:
         ticker = yf.Ticker(symbol)
         start = target_date
-        end   = target_date + timedelta(days=5)
+        end   = target_date + timedelta(days=10)
         hist  = ticker.history(start=start.isoformat(), end=end.isoformat(), interval="1d")
         if hist.empty:
             return None
@@ -350,6 +403,13 @@ async def run_outcome_check():
                     existing_row.check_date          = datetime.now(IST)
                     logger.info(f"  Resolved stuck OPEN: {score.symbol} D{check_day} shadow={is_shadow} → {outcome}")
                 else:
+                    is_deployed = True if getattr(score, "position_sizing", 0.0) and getattr(score, "position_sizing", 0.0) > 0 else False
+                    t_outcome = t_pnl_pct = t_pnl_amt = t_date = t_price = None
+                    if is_deployed:
+                        t_outcome, t_pnl_pct, t_pnl_amt, t_date, t_price = _evaluate_trailing_stop(
+                            score.symbol, score.timestamp.date(), check_day, entry_price, score.stop_loss or 0.0, t_conservative, tracked_signal in ("BUY", "STRONG BUY")
+                        )
+                    
                     db.add(SignalOutcome(
                         analysis_score_id   = score.id,
                         symbol              = score.symbol,
@@ -374,7 +434,14 @@ async def run_outcome_check():
                         outcome_detail      = detail,
                         regime              = getattr(score, "regime", None) or "SIDEWAYS",
                         is_shadow           = is_shadow,
+                        is_deployed         = is_deployed,
+                        trailing_outcome    = t_outcome,
+                        trailing_pnl_percent = t_pnl_pct,
+                        trailing_pnl_amount = t_pnl_amt,
+                        trailing_exit_date  = t_date,
+                        trailing_exit_price = t_price
                     ))
+
                 checked += 1
 
         await db.commit()

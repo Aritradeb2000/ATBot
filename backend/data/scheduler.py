@@ -376,7 +376,16 @@ async def job_daily_screener():
                 fundamentals = await loop.run_in_executor(None, lambda: fetch_fundamentals(symbol))
                 news         = await loop.run_in_executor(None, lambda: fetch_finnhub_news(symbol))
 
-                tech_result  = analyze_technical(ohlcv_df)
+                from backend.data.nse_live import get_delivery_data
+                delivery_data = await loop.run_in_executor(None, lambda: get_delivery_data(symbol))
+                delivery_pct = None
+                if delivery_data and delivery_data.get("delivery_pct"):
+                    try:
+                        delivery_pct = float(delivery_data["delivery_pct"])
+                    except:
+                        pass
+                        
+                tech_result  = analyze_technical(ohlcv_df, delivery_pct=delivery_pct)
                 fund_result  = analyze_fundamental(fundamentals)
                 sent_result  = analyze_sentiment(news, fii_dii)
 
@@ -429,6 +438,15 @@ async def job_daily_screener():
             batch = SCAN_SYMBOLS[i: i + BATCH_SIZE]
             await asyncio.gather(*[_score_one(s) for s in batch])
             logger.info(f"  Auto-screener: {min(i + BATCH_SIZE, len(SCAN_SYMBOLS))}/{len(SCAN_SYMBOLS)} done")
+
+        # Phase 2: Portfolio Sector Caps Allocation
+        try:
+            from backend.engines.portfolio_manager import run_portfolio_allocation_for_today
+            logger.info("  Auto-screener: Running portfolio allocation rules...")
+            # Run synchronously since it uses SessionLocal (not async)
+            await asyncio.get_event_loop().run_in_executor(None, run_portfolio_allocation_for_today)
+        except Exception as e:
+            logger.error(f"Portfolio allocation failed: {e}")
 
         _cache["last_updated"]["daily_screener"] = datetime.now(IST).isoformat()
         logger.info(f"✅ Daily auto-screener complete — {saved} saved, {errors} skipped")

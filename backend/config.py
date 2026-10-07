@@ -96,10 +96,10 @@ GLOBAL_CUES = {
 
 # ── Signal thresholds ─────────────────────────────────────────────────────
 SIGNAL_THRESHOLDS = {
-    "STRONG_BUY": 75,
-    "BUY": 60,
+    "STRONG_BUY": 85,
+    "BUY": 75,
     "HOLD": 45,
-    "SELL": 30,
+    "SELL": 35,
     # Below 30 → STRONG SELL
 }
 
@@ -112,3 +112,8 @@ NEWS_RSS_FEEDS = {
     "business_line": "https://www.thehindubusinessline.com/markets/feeder/default.rss",
     "sebi_press": "https://www.sebi.gov.in/sebirss.xml",
 }
+
+
+# Portfolio Risk Caps
+MAX_SECTOR_POSITIONS = 2
+MAX_TOTAL_POSITIONS = 5

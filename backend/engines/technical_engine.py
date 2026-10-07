@@ -23,7 +23,7 @@ BULLISH_PATTERNS = ["CDL_ENGULFING", "CDL_MORNINGSTAR", "CDL_HAMMER", "CDL_PIERC
 BEARISH_PATTERNS = ["CDL_ENGULFING", "CDL_EVENINGSTAR", "CDL_SHOOTINGSTAR", "CDL_DARKCLOUDCOVER"]
 
 
-def analyze_technical(df: pd.DataFrame) -> dict:
+def analyze_technical(df: pd.DataFrame, delivery_pct: float = None) -> dict:
     if df is None or len(df) < 50:
         logger.warning("Not enough data for technical analysis (need at least 50 periods).")
         return {"score": 0, "signals": ["Not enough data"]}
@@ -217,7 +217,18 @@ def analyze_technical(df: pd.DataFrame) -> dict:
             primary_score = 0.5 * trend_score + 0.5 * reversion_score
             mode = "MIXED"
 
+
+        # Phase 4 Ablation: Hard filter on delivery percentage
+        if delivery_pct is not None:
+            if delivery_pct < 50.0:
+                signals.append(f"Low Delivery Penalty ({delivery_pct}%)")
+                if primary_score > 50:
+                    primary_score = min(primary_score, 45.0)
+            else:
+                signals.append(f"High Delivery Confirmed ({delivery_pct}%)")
+
         trend_score     = max(0.0, min(100.0, trend_score))
+
         reversion_score = max(0.0, min(100.0, reversion_score))
         primary_score   = max(0.0, min(100.0, primary_score))
 

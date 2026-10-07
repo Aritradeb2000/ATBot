@@ -214,13 +214,13 @@ def calculate_composite(
     # ── Compute shadow signal (pre-kill-switch) ──────────────────────────────
     regime_offset = {"BEAR": 10, "SIDEWAYS": 5, "BULL": 0}.get(regime, 0)
 
-    if comp_score >= (75 + regime_offset):
+    if comp_score >= (85 + regime_offset):
         shadow_signal = "STRONG BUY"
-    elif comp_score >= (60 + regime_offset):
+    elif comp_score >= (75 + regime_offset):
         shadow_signal = "BUY"
     elif comp_score >= 45:
         shadow_signal = "HOLD"
-    elif comp_score >= 30:
+    elif comp_score >= 35:
         shadow_signal = "SELL"
     else:
         shadow_signal = "STRONG SELL"
@@ -242,7 +242,7 @@ def calculate_composite(
 
     if current_price and atr and (is_buy_shadow or is_sell_shadow):
         conviction_mult = min(1.6, 1.0 + (max(0, comp_score - 60) * 0.015))
-        regime_target_mult = {"BULL": 1.1, "SIDEWAYS": 1.0, "BEAR": 0.80}.get(regime, 1.0)
+        regime_target_mult = {"BULL": 2.5, "SIDEWAYS": 2.0, "BEAR": 1.5}.get(regime, 2.0)
         regime_stop_mult   = {"BULL": 1.7, "SIDEWAYS": 1.5, "BEAR": 1.2}.get(regime, 1.5)
 
         eff_target = conviction_mult * regime_target_mult
