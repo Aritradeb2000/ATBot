@@ -535,7 +535,16 @@ async def job_nightly_precompute(universe_name: str = "nifty200"):
             fundamentals = await loop.run_in_executor(None, lambda: fetch_fundamentals(symbol))
             news         = await loop.run_in_executor(None, lambda: fetch_finnhub_news(symbol))
 
-            tech_result  = analyze_technical(ohlcv_df)
+            from backend.data.nse_live import get_delivery_data
+            delivery_data = await loop.run_in_executor(None, lambda: get_delivery_data(symbol))
+            delivery_pct = None
+            if delivery_data and delivery_data.get("delivery_pct"):
+                try:
+                    delivery_pct = float(delivery_data["delivery_pct"])
+                except:
+                    pass
+
+            tech_result  = analyze_technical(ohlcv_df, delivery_pct=delivery_pct)
             fund_result  = analyze_fundamental(fundamentals)
             sent_result  = analyze_sentiment(news, fii_dii)
 
