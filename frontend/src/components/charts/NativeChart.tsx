@@ -1,6 +1,5 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts';
-import { useTheme } from 'next-themes';
 import { marketApi } from '@/lib/api';
 
 interface NativeChartProps {
@@ -9,7 +8,6 @@ interface NativeChartProps {
 
 export const NativeChart: React.FC<NativeChartProps> = ({ symbol }) => {
     const chartContainerRef = useRef<HTMLDivElement>(null);
-    const { theme } = useTheme();
     const [interval, setInterval] = useState<string>('1d');
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
@@ -18,7 +16,22 @@ export const NativeChart: React.FC<NativeChartProps> = ({ symbol }) => {
     const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
     const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
 
-    const isDark = theme === 'dark' || (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const [isDark, setIsDark] = useState<boolean>(false);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const checkDark = () => document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+            setIsDark(checkDark());
+            
+            const observer = new MutationObserver(mutations => {
+                mutations.forEach(mutation => {
+                    if (mutation.attributeName === 'class') setIsDark(checkDark());
+                });
+            });
+            observer.observe(document.documentElement, { attributes: true });
+            return () => observer.disconnect();
+        }
+    }, []);
 
     useEffect(() => {
         if (!chartContainerRef.current) return;
