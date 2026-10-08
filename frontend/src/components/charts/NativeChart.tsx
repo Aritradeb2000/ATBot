@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
-import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts';
+import { createChart, ColorType, IChartApi, ISeriesApi, Time, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
 import { marketApi } from '@/lib/api';
 
 interface NativeChartProps {
@@ -59,7 +59,7 @@ export const NativeChart: React.FC<NativeChartProps> = ({ symbol }) => {
         
         chartRef.current = chart;
 
-        const candlestickSeries = chart.addCandlestickSeries({
+        const candlestickSeries = chart.addSeries(CandlestickSeries, {
             upColor: '#26a69a',
             downColor: '#ef5350',
             borderVisible: false,
@@ -68,7 +68,7 @@ export const NativeChart: React.FC<NativeChartProps> = ({ symbol }) => {
         });
         candlestickSeriesRef.current = candlestickSeries;
 
-        const volumeSeries = chart.addHistogramSeries({
+        const volumeSeries = chart.addSeries(HistogramSeries, {
             color: '#26a69a',
             priceFormat: {
                 type: 'volume',
