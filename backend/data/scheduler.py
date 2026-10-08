@@ -29,7 +29,13 @@ from backend.engines.ensemble_scorer import set_adaptive_weights
 logger = logging.getLogger(__name__)
 
 # Global scheduler instance
-scheduler = AsyncIOScheduler(timezone=IST)
+# Global scheduler instance
+job_defaults = {
+    'misfire_grace_time': 60,
+    'coalesce': True,
+    'max_instances': 3
+}
+scheduler = AsyncIOScheduler(timezone=IST, job_defaults=job_defaults)
 
 # In-memory cache for latest data (until DB is available)
 _cache = {
