@@ -222,3 +222,10 @@ export async function runOptimizer(req: OptimizerRequest): Promise<OptimizerResu
   const res = await api.post('/api/optimizer/run', req, { timeout: 300000 }); // 5 min timeout
   return res.data;
 }
+
+export const marketApi = {
+  getOHLCV: async (symbol: string, period: string, interval: string) => {
+    const res = await api.get(`/api/ohlcv/${symbol.toUpperCase()}`, { params: { period, interval } });
+    return res.data;
+  }
+};

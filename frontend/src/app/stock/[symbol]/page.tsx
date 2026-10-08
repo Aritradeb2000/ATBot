@@ -9,7 +9,7 @@ import PriceTargetBar from "@/components/ui/PriceTargetBar";
 import { analyzeStock, getStockNews, type AnalysisResult, type NewsArticle } from "@/lib/api";
 
 // TradingView chart is client-only (no SSR)
-const TradingViewChart = dynamic(() => import("@/components/charts/TradingViewChart"), { ssr: false });
+const NativeChart = dynamic(() => import("@/components/charts/NativeChart").then(mod => ({ default: mod.NativeChart })), { ssr: false });
 
 interface Props {
   params: { symbol: string };
@@ -212,7 +212,7 @@ export default function StockDetailPage({ params }: Props) {
             })}
           </div>
         </div>
-        <TradingViewChart 
+        <NativeChart 
           symbol={decodedSymbol}
           period={activeRange.period}
           interval={activeRange.interval}
