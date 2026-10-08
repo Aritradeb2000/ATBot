@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
-import { createChart, ColorType, IChartApi, ISeriesApi, Time, CandlestickSeries, HistogramSeries, createSeriesMarkers } from 'lightweight-charts';
+import { createChart, ColorType, IChartApi, ISeriesApi, Time, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
 import { marketApi } from '@/lib/api';
 
 interface NativeChartProps {
@@ -117,44 +117,14 @@ export const NativeChart: React.FC<NativeChartProps> = ({ symbol }) => {
                         return timeA - timeB;
                     });
 
-                    const markers: any[] = [];
-                    const volumeData = sortedData.map((item, i, arr) => {
-                        // Calculate 20-period moving average of volume
-                        let sumVol = 0;
-                        let count = 0;
-                        for (let j = Math.max(0, i - 20); j < i; j++) {
-                            sumVol += arr[j].volume;
-                            count++;
-                        }
-                        const avgVol = count > 0 ? sumVol / count : item.volume;
-                        
-                        // Tag as unusual if volume is > 2.5x the 20MA
-                        const isUnusual = i > 10 && item.volume > (avgVol * 2.5);
-                        
-                        if (isUnusual) {
-                            markers.push({
-                                time: item.time as Time,
-                                position: item.close >= item.open ? 'belowBar' : 'aboveBar',
-                                color: '#f59e0b',
-                                shape: item.close >= item.open ? 'arrowUp' : 'arrowDown',
-                                text: 'Volume Spike',
-                            });
-                        }
-                        
-                        let barColor = item.close >= item.open ? '#26a69a80' : '#ef535080';
-                        if (isUnusual) {
-                            barColor = '#f59e0b'; // Vibrant amber for unusual volume
-                        }
-
-                        return {
-                            time: item.time as Time,
-                            value: item.volume,
-                            color: barColor,
-                        };
-                    });
+                    // Prepare volume data with correct color based on candlestick
+                    const volumeData = sortedData.map(item => ({
+                        time: item.time as Time,
+                        value: item.volume,
+                        color: item.close >= item.open ? '#26a69a80' : '#ef535080',
+                    }));
 
                     candlestickSeriesRef.current?.setData(sortedData);
-                    if (candlestickSeriesRef.current && markers.length > 0) { createSeriesMarkers(candlestickSeriesRef.current, markers); }
                     volumeSeriesRef.current?.setData(volumeData);
                     
                     // Fit content
