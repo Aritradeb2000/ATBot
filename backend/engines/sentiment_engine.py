@@ -80,22 +80,58 @@ def analyze_sentiment(articles: list[dict], fii_dii: dict = None) -> dict:
             elif news_score < 30:
                 flags.append(f"Highly Negative News ({sentiment_breakdown['negative']} neg / {sentiment_breakdown['positive']} pos)")
 
-    # --- 2. FII / DII Flow (30% weight) ---
+    # --- 2. FII / DII Flow (30% weight: Max +/-15 pts) ---
     if fii_dii:
-        fii_net = fii_dii.get("fii_net", 0)
-        dii_net = fii_dii.get("dii_net", 0)
-        if fii_net > 1000:
-            score += 15
-            flags.append(f"Strong FII Buying (+{fii_net}Cr)")
-        elif fii_net > 0: score += 5
-        elif fii_net < -1000:
-            score -= 15
-            flags.append(f"Strong FII Selling ({fii_net}Cr)")
-        elif fii_net < 0: score -= 5
-            
-        if dii_net > 1000 and fii_net < 0:
-            flags.append(f"DIIs absorbing FII selling (+{dii_net}Cr)")
-            score += 5
+        fii_net = float(fii_dii.get("fii_net") or 0)
+        dii_net = float(fii_dii.get("dii_net") or 0)
+        flow_score = 0.0
+
+        # Scenario A: Both Institutional Giants Aligned Strongly
+        if fii_net >= 1000 and dii_net >= 1000:
+            flow_score += 15.0
+            flags.append(f"FIIs and DIIs buying both ({fii_net + dii_net:+.0f}Cr)")
+        elif fii_net <= -1000 and dii_net <= -1000:
+            flow_score -= 15.0
+            flags.append(f"FIIs and DIIs selling both ({fii_net + dii_net:+.0f}Cr)")
+        else:
+            # 1. FII Flow (Max +/-10)
+            if fii_net >= 1000:
+                flow_score += 10.0
+                flags.append(f"Strong FII Buying (+{fii_net:.0f}Cr)")
+            elif fii_net > 0:
+                flow_score += 4.0
+                flags.append(f"Mild FII Buying (+{fii_net:.0f}Cr)")
+            elif fii_net <= -1000:
+                flow_score -= 10.0
+                flags.append(f"Strong FII Selling ({fii_net:.0f}Cr)")
+            elif fii_net < 0:
+                flow_score -= 4.0
+                flags.append(f"Mild FII Selling ({fii_net:.0f}Cr)")
+
+            # 2. DII Flow (Max +/-5)
+            if dii_net >= 1000:
+                flow_score += 5.0
+                flags.append(f"Strong DII Buying (+{dii_net:.0f}Cr)")
+            elif dii_net > 0:
+                flow_score += 2.0
+            elif dii_net <= -1000:
+                flow_score -= 5.0
+                flags.append(f"Strong DII Selling ({dii_net:.0f}Cr)")
+            elif dii_net < 0:
+                flow_score -= 2.0
+
+            # 3. Cross-Flow Dynamics & Absorption
+            if dii_net >= 1000 and fii_net < 0:
+                flags.append(f"DIIs absorbing FII selling (+{dii_net:.0f}Cr)")
+                flow_score += 4.0
+            elif fii_net >= 1000 and dii_net < 0:
+                flags.append(f"FIIs absorbing DII selling (+{fii_net:.0f}Cr)")
+
+        if fii_net == 0 and dii_net == 0:
+            flags.append("Neutral institutional flow")
+
+        # Bound strictly within the 30% weight budget (+/-15 points)
+        score += max(-15.0, min(15.0, flow_score))
     else:
         flags.append("No institutional flow data")
 
