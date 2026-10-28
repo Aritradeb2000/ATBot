@@ -2,12 +2,14 @@
 ATBot — FastAPI Application Entry Point
 """
 
-from fastapi import FastAPI
+import time
+import logging
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-import logging
 
 from backend.config import settings
+from backend.logging_config import setup_logging, get_request_logger
 from backend.models.database import init_db
 from backend.data.scheduler import (
     setup_scheduler, job_refresh_index_data,
@@ -20,12 +22,10 @@ from backend.engines.ensemble_scorer import set_adaptive_weights
 from backend.api.routes import analysis, market, news, screener, settings as settings_router, learn, optimizer
 from backend.api.websocket import router as ws_router
 
-# Setup basic logging
-logging.basicConfig(
-    level=logging.INFO if settings.debug else logging.WARNING,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# Setup date-wise file logging (requests, errors, app) and console logging
+setup_logging(debug=settings.debug)
 logger = logging.getLogger(__name__)
+request_logger = get_request_logger()
 
 
 @asynccontextmanager
@@ -101,6 +101,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Date-wise Request & Error Logging Middleware
+@app.middleware("http")
+async def log_requests_middleware(request: Request, call_next):
+    start_time = time.perf_counter()
+    client_ip = request.client.host if request.client else "unknown"
+    method = request.method
+    path = request.url.path
+    if request.url.query:
+        path = f"{path}?{request.url.query}"
+
+    try:
+        response = await call_next(request)
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        request_logger.info(
+            f"{client_ip} | {method} {path} | {response.status_code} | {duration_ms:.1f}ms"
+        )
+        return response
+    except Exception as exc:
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        request_logger.error(
+            f"{client_ip} | {method} {path} | 500 ERROR | {duration_ms:.1f}ms | {exc}"
+        )
+        logger.exception(f"Unhandled exception during {method} {path}: {exc}")
+        raise exc
 
 # Include Routers
 app.include_router(analysis.router, prefix="/api")
