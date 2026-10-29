@@ -225,19 +225,26 @@ def calculate_composite(
         t_raw = tech_data.get("score")
         t_used_field = "score"
 
-    t_has_data = t_raw is not None
-    f_has_data = fund_data.get("score") is not None
-    s_has_data = sent_data.get("score") is not None
+    # Defensive dictionary checks
+    tech_data = tech_data if isinstance(tech_data, dict) else {}
+    fund_data = fund_data if isinstance(fund_data, dict) else {}
+    sent_data = sent_data if isinstance(sent_data, dict) else {}
+
+    t_has_data = (t_raw is not None)
+    f_val = fund_data.get("score")
+    f_has_data = (f_val is not None)
+    s_val = sent_data.get("score")
+    s_has_data = (s_val is not None)
     missing_engines = sum(1 for x in (t_has_data, f_has_data, s_has_data) if not x)
 
-    t_score = t_raw if t_raw is not None else 50
-    f_score = fund_data.get("score", 50)
+    t_score = float(t_raw) if t_has_data else 50.0
+    f_score = float(f_val) if f_has_data else 50.0
     
     # 📉 BEAR MARKET: Non-linear Fundamental Suppression
     # Do not let high fundamentals overpower a weak technical downtrend.
     if regime == "BEAR" and t_score < 50:
         f_score = min(f_score, 50.0)
-    s_score = sent_data.get("score", 50)
+    s_score = float(s_val) if s_has_data else 50.0
 
     # ── Weights ──────────────────────────────────────────────────────────────
     adaptive = _get_adaptive_weights_sync()
@@ -434,9 +441,9 @@ def calculate_composite(
         "weights_source": weights_source,
         "ai_signal_quality": ai_eval,
         "components": {
-            "technical":   t_score,
-            "fundamental": f_score,
-            "sentiment":   s_score,
+            "technical":   round(t_score, 2) if t_has_data else None,
+            "fundamental": round(f_score, 2) if f_has_data else None,
+            "sentiment":   round(s_score, 2) if s_has_data else None,
             "missing_engines": missing_engines,
             "technical_source": t_used_field,
             # v4: raw sub-scores so we can backtest without re-running
