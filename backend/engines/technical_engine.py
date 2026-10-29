@@ -254,9 +254,36 @@ def analyze_technical(df: pd.DataFrame, delivery_pct: float = None) -> dict:
         primary_score   = max(0.0, min(100.0, primary_score))
 
         # ── Return ───────────────────────────────────────────────────────────
+        # Compute normalized ML feature vector for ensemble XGBoost filter
+        features = {
+            "technical_score": float(primary_score),
+            "rsi_14": float(rsi) if pd.notna(rsi) else 50.0,
+            "adx_14": float(adx_val) if adx_val is not None else 20.0,
+            "dmp_14": float(latest.get("DMP_14", 20.0)) if pd.notna(latest.get("DMP_14")) else 20.0,
+            "dmn_14": float(latest.get("DMN_14", 20.0)) if pd.notna(latest.get("DMN_14")) else 20.0,
+            "macd": float(macd_val) if pd.notna(macd_val) else 0.0,
+            "macd_signal": float(macd_sig) if pd.notna(macd_sig) else 0.0,
+            "macd_hist": float(macd_hist) if pd.notna(macd_hist) else 0.0,
+            "atr_pct": float((latest["ATR_14"] / close_px) * 100) if pd.notna(latest.get("ATR_14")) and close_px > 0 else 2.0,
+            "bb_pct": float(latest.get("BB_pct", 0.5)) if pd.notna(latest.get("BB_pct")) else 0.5,
+            "bb_width": float((latest["BB_upper"] - latest["BB_lower"]) / latest["BB_mid"]) if (pd.notna(latest.get("BB_upper")) and pd.notna(latest.get("BB_mid")) and latest["BB_mid"] > 0) else 0.05,
+            "supertrend_dir": float(latest.get("Supertrend_dir", 1.0)) if pd.notna(latest.get("Supertrend_dir")) else 1.0,
+            "above_200ema": 1.0 if (latest.get("EMA_200") is not None and pd.notna(latest["EMA_200"]) and close_px > latest["EMA_200"]) else 0.0,
+            "dist_ema9": float((close_px - latest["EMA_9"]) / latest["EMA_9"]) if (latest.get("EMA_9") is not None and pd.notna(latest["EMA_9"])) else 0.0,
+            "dist_ema21": float((close_px - latest["EMA_21"]) / latest["EMA_21"]) if (latest.get("EMA_21") is not None and pd.notna(latest["EMA_21"])) else 0.0,
+            "dist_ema50": float((close_px - latest["EMA_50"]) / latest["EMA_50"]) if (latest.get("EMA_50") is not None and pd.notna(latest["EMA_50"])) else 0.0,
+            "dist_ema200": float((close_px - latest["EMA_200"]) / latest["EMA_200"]) if (latest.get("EMA_200") is not None and pd.notna(latest["EMA_200"])) else 0.0,
+            "ema9_ema21_spread": float((latest["EMA_9"] - latest["EMA_21"]) / latest["EMA_21"]) if (latest.get("EMA_9") is not None and latest.get("EMA_21") is not None and pd.notna(latest["EMA_9"]) and pd.notna(latest["EMA_21"])) else 0.0,
+            "ema21_ema50_spread": float((latest["EMA_21"] - latest["EMA_50"]) / latest["EMA_50"]) if (latest.get("EMA_21") is not None and latest.get("EMA_50") is not None and pd.notna(latest["EMA_21"]) and pd.notna(latest["EMA_50"])) else 0.0,
+            "vol_ratio": float(vol / max(1.0, vol_avg)) if (pd.notna(vol_avg) and vol_avg > 0) else 1.0,
+            "is_overextended": 1.0 if (latest.get("EMA_21") is not None and pd.notna(latest["EMA_21"]) and ((close_px - latest["EMA_21"]) / latest["EMA_21"] * 100) >= 3.5) else 0.0,
+            "is_pullback_setup": 1.0 if any("Pullback" in s for s in signals) else 0.0,
+        }
+
         return {
             # Backward-compatible primary score — ensemble_scorer reads this
             "score": round(primary_score, 2),
+            "features": features,
 
             # PATCH: dual-engine outputs for future meta-learner use
             "trend_score":     round(trend_score, 2),

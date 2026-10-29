@@ -129,6 +129,70 @@ def _static_regime_weights(regime: str) -> dict:
     return {"T": 0.45, "F": 0.30, "S": 0.25}
 
 
+
+# ── XGBoost Signal Filter (Trained on 2017-2024 Regime-Diverse Data) ──────────
+_xgb_filter_cache = None
+
+def get_xgb_signal_filter():
+    """Lazily loads the production XGBoost classifier trained on 2017-2024 Nifty 200 data."""
+    global _xgb_filter_cache
+    if _xgb_filter_cache is None:
+        try:
+            import os
+            import joblib
+            model_path = os.path.join(
+                os.path.dirname(__file__), "..", "models", "weights", "xgb_signal_filter.joblib"
+            )
+            if os.path.exists(model_path):
+                _xgb_filter_cache = joblib.load(model_path)
+                logger.info("Loaded XGBoost signal filter (2017-2024 Nifty 200 trained) successfully.")
+        except Exception as e:
+            logger.warning(f"Could not load xgb_signal_filter: {e}")
+    return _xgb_filter_cache
+
+def evaluate_signal_quality(tech_data: dict, is_buy: bool) -> dict:
+    """
+    Evaluates historical win probability for a setup using the 2017-2024 calibrated XGBoost model.
+    """
+    pkg = get_xgb_signal_filter()
+    if not pkg:
+        return {"win_prob": None, "verdict": "MODEL_UNAVAILABLE", "ai_note": None}
+
+    features = tech_data.get("features")
+    if not features:
+        return {"win_prob": None, "verdict": "FEATURES_UNAVAILABLE", "ai_note": None}
+
+    try:
+        model = pkg["model"]
+        feature_cols = pkg["feature_cols"]
+
+        # Build feature vector
+        row = dict(features)
+        row["is_buy"] = 1.0 if is_buy else 0.0
+
+        import numpy as np
+        import pandas as pd
+        vec = [row.get(col, 0.0) for col in feature_cols]
+        X = pd.DataFrame([vec], columns=feature_cols).replace([np.inf, -np.inf], np.nan).fillna(0)
+
+        win_prob = float(model.predict_proba(X)[0, 1])
+
+        if win_prob >= 0.55:
+            verdict = "HIGH_CONVICTION"
+            note = f"🔥 AI Conviction: {win_prob*100:.1f}% estimated win rate (2017-2024 calibrated)"
+        elif win_prob >= 0.45:
+            verdict = "NEUTRAL"
+            note = f"⚖️ AI Neutral: {win_prob*100:.1f}% win probability"
+        else:
+            verdict = "LOW_PROBABILITY"
+            note = f"⚠️ AI Caution: Low historical win probability ({win_prob*100:.1f}%)"
+
+        return {"win_prob": round(win_prob, 3), "verdict": verdict, "ai_note": note}
+    except Exception as e:
+        logger.warning(f"Error evaluating signal quality: {e}")
+        return {"win_prob": None, "verdict": "ERROR", "ai_note": str(e)}
+
+
 def calculate_composite(
     tech_data: dict,
     fund_data: dict,
@@ -295,6 +359,16 @@ def calculate_composite(
             f"{_sideways_kill_state['win_rate']:.1%})"
         )
 
+    # ── AI Signal Quality Assessment (XGBoost 2017-2024 Filter) ───────────────
+    ai_eval = {"win_prob": None, "verdict": "NOT_EVALUATED", "ai_note": None}
+    if is_buy_shadow or is_sell_shadow:
+        ai_eval = evaluate_signal_quality(tech_data, is_buy=is_buy_shadow)
+        # If AI model flags low probability in a sideways/bear regime, downgrade weak BUY to HOLD
+        if ai_eval.get("verdict") == "LOW_PROBABILITY" and regime in ["SIDEWAYS", "BEAR"]:
+            if signal == "BUY" and comp_score < 80:
+                signal = "HOLD"
+                logger.info(f"[Ensemble] AI XGBoost filter downgraded weak BUY to HOLD (P={ai_eval.get('win_prob')})")
+
     # ── Confidence ────────────────────────────────────────────────────────────
     active_scores = [s for s, has in [(t_score, t_has_data), (f_score, f_has_data), (s_score, s_has_data)] if has]
 
@@ -304,6 +378,10 @@ def calculate_composite(
                  for j in range(i + 1, len(active_scores))]
         max_diff = max(abs(a - b) for a, b in pairs)
         confidence = max(0, min(100, 100 - max_diff))
+        if ai_eval.get("verdict") == "HIGH_CONVICTION":
+            confidence = min(98.0, confidence + 12.0)
+        elif ai_eval.get("verdict") == "LOW_PROBABILITY":
+            confidence = max(20.0, confidence - 15.0)
         if missing_engines > 0:
             confidence = min(confidence, 100 - (missing_engines * 25))
     elif len(active_scores) == 1:
@@ -354,6 +432,7 @@ def calculate_composite(
         "position_sizing": position_sizing,
         "weights_used": weights,
         "weights_source": weights_source,
+        "ai_signal_quality": ai_eval,
         "components": {
             "technical":   t_score,
             "fundamental": f_score,
