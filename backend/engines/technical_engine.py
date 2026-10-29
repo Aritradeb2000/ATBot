@@ -160,6 +160,27 @@ def analyze_technical(df: pd.DataFrame, delivery_pct: float = None) -> dict:
                 trend_score -= 10
                 signals.append("Bearish Volume Spike (>2x)")
 
+        # ── Overextension & Pullback Confirmation in Uptrend ─────────────────
+        if latest.get("EMA_21") is not None and pd.notna(latest["EMA_21"]) and latest["EMA_21"] > 0:
+            stretch_21 = (close_px - latest["EMA_21"]) / latest["EMA_21"] * 100
+            # A. Overextension Penalty: Do not chase tops when stretched > 3.5% above 21 EMA
+            if stretch_21 >= 3.5:
+                trend_score -= 10
+                signals.append(f"Overextended above 21 EMA (+{stretch_21:.1f}%) — Wait for Pullback")
+
+            # B. Bullish Pullback Entry in Confirmed Uptrend (Prime R:R Setup)
+            is_uptrend = (
+                latest.get("EMA_200") is not None and pd.notna(latest["EMA_200"]) and close_px > latest["EMA_200"] and
+                latest.get("EMA_50") is not None and pd.notna(latest["EMA_50"]) and latest["EMA_50"] > latest["EMA_200"]
+            )
+            low_px = latest["Low"]
+            dist_low_21 = (low_px - latest["EMA_21"]) / latest["EMA_21"]
+            if (is_uptrend and dist_low_21 <= 0.015 and low_px >= latest["EMA_21"] * 0.97 and
+                    close_px > latest["Open"] and close_px > latest["EMA_21"] and
+                    pd.notna(rsi) and 42 <= rsi <= 58):
+                trend_score += 15
+                signals.append("Bullish 21-EMA Pullback Confirmation (Prime R:R Setup)")
+
         # ═══ MEAN-REVERSION SUB-SCORE ═══════════════════════════════════════
         if pd.notna(rsi):
             if rsi < 30:

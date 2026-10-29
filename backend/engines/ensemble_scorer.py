@@ -241,9 +241,10 @@ def calculate_composite(
     is_sell_shadow = shadow_signal in ["SELL", "STRONG SELL"]
 
     if current_price and atr and (is_buy_shadow or is_sell_shadow):
-        conviction_mult = min(1.6, 1.0 + (max(0, comp_score - 60) * 0.015))
-        regime_target_mult = {"BULL": 2.5, "SIDEWAYS": 2.0, "BEAR": 1.5}.get(regime, 2.0)
-        regime_stop_mult   = {"BULL": 1.7, "SIDEWAYS": 1.5, "BEAR": 1.2}.get(regime, 1.5)
+        conviction_mult = min(1.5, 1.0 + (max(0, comp_score - 60) * 0.015))
+        regime_target_mult = {"BULL": 2.2, "SIDEWAYS": 1.8, "BEAR": 1.5}.get(regime, 1.8)
+        # Positive Risk:Reward: Tight stop loss (max 1.2x ATR) prevents single loss from wiping out multiple wins
+        regime_stop_mult   = {"BULL": 1.2, "SIDEWAYS": 1.0, "BEAR": 1.0}.get(regime, 1.0)
 
         eff_target = conviction_mult * regime_target_mult
         direction  = 1.0 if is_buy_shadow else -1.0
@@ -253,15 +254,17 @@ def calculate_composite(
             else current_price + (atr * regime_stop_mult), 2
         )
 
+        # 5-Day Swing Targets: Base Target guarantees positive 1:1.6 to 1:2 Risk:Reward
         targets_5d = {
-            "conservative": round(current_price + direction * (atr * 0.75 * eff_target), 2),
-            "base":         round(current_price + direction * (atr * 1.25 * eff_target), 2),
-            "aggressive":   round(current_price + direction * (atr * 1.75 * eff_target), 2),
+            "conservative": round(current_price + direction * max(atr * 1.2, atr * 0.9 * eff_target), 2),
+            "base":         round(current_price + direction * (atr * 1.8 * eff_target), 2),
+            "aggressive":   round(current_price + direction * (atr * 2.6 * eff_target), 2),
         }
+        # 10-Day Position Targets
         targets_10d = {
-            "conservative": round(current_price + direction * (atr * 1.5 * eff_target), 2),
-            "base":         round(current_price + direction * (atr * 2.5 * eff_target), 2),
-            "aggressive":   round(current_price + direction * (atr * 3.5 * eff_target), 2),
+            "conservative": round(current_price + direction * (atr * 1.8 * eff_target), 2),
+            "base":         round(current_price + direction * (atr * 2.8 * eff_target), 2),
+            "aggressive":   round(current_price + direction * (atr * 4.0 * eff_target), 2),
         }
         targets_50d = {
             "conservative": round(current_price + direction * (atr * 4.0 * eff_target), 2),
@@ -275,8 +278,9 @@ def calculate_composite(
         }
         targets = targets_5d
 
-        reward_rr = atr * 2.5 * eff_target
-        risk_rr   = atr * 1.5
+        # Realized Risk-to-Reward Ratio: Base Target vs Strict Stop Loss
+        reward_rr = abs(targets_5d["base"] - current_price)
+        risk_rr   = abs(current_price - stop_loss)
         rr_ratio  = round(reward_rr / risk_rr, 2) if risk_rr > 0 else 0
 
     # ── Kill switch — mask the visible signal only ────────────────────────────

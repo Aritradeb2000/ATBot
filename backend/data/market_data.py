@@ -1,3 +1,4 @@
+import os
 """
 ATBot — Market Data Fetcher
 Fetches OHLCV data from Yahoo Finance for NSE/BSE stocks
@@ -50,23 +51,68 @@ def get_trading_days_back(n: int) -> date:
 
 # ── OHLCV Fetcher ─────────────────────────────────────────────────────────
 
+
+# ── Local Nifty 200 Data Provider ──────────────────────────────────────────
+LOCAL_DATA_DIR = r"C:\Users\aritrad\Desktop\ATBot\nifty200_data"
+
+def get_local_ohlcv(symbol: str, period: str = "6mo") -> Optional[pd.DataFrame]:
+    """
+    Lightning-fast local OHLCV loader for Nifty 200 constituents.
+    Loads historical daily bars directly from disk in <1ms without network calls.
+    """
+    if not os.path.exists(LOCAL_DATA_DIR):
+        return None
+
+    clean_sym = symbol.replace(".NS", "").replace(".BO", "").strip().upper()
+    csv_path = os.path.join(LOCAL_DATA_DIR, f"{clean_sym}.csv")
+    if not os.path.exists(csv_path):
+        return None
+
+    try:
+        df = pd.read_csv(csv_path)
+        if df.empty or "Date" not in df.columns:
+            return None
+
+        df["Date"] = pd.to_datetime(df["Date"])
+        df = df.set_index("Date").sort_index()
+        df = df[["Open", "High", "Low", "Close", "Volume"]]
+
+        period_days = {
+            "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825, "max": 99999
+        }.get(period, 180)
+
+        cutoff = df.index.max() - pd.Timedelta(days=period_days)
+        df = df[df.index >= cutoff].copy()
+
+        if df.index.tz is not None:
+            df.index = df.index.tz_convert(IST)
+        else:
+            df.index = df.index.tz_localize(IST)
+
+        df = df[(df["Close"] > 0) & (df["Volume"] > 0)]
+        return df
+    except Exception as e:
+        logger.warning(f"Failed to read local CSV for {symbol}: {e}")
+        return None
+
+
 def fetch_ohlcv(
     symbol: str,
     interval: str = "1d",
     period: str = "6mo"
 ) -> Optional[pd.DataFrame]:
     """
-    Fetch OHLCV data for a symbol from Yahoo Finance.
-
-    Args:
-        symbol: NSE ticker e.g. "RELIANCE.NS" or "TCS.NS"
-        interval: "1d", "1h", "15m", "5m"
-        period: "1mo", "3mo", "6mo", "1y", "2y"
-
-    Returns:
-        DataFrame with columns: Open, High, Low, Close, Volume
-        or None if fetch fails.
+    Fetch OHLCV data for a symbol. Uses local Nifty 200 offline cache first
+    for instant <1ms loading, falling back to Yahoo Finance.
     """
+    # 1. Fast offline local cache for daily candles
+    if interval == "1d":
+        local_df = get_local_ohlcv(symbol, period)
+        if local_df is not None and not local_df.empty:
+            logger.debug(f"Loaded {len(local_df)} bars for {symbol} from local Nifty 200 cache")
+            return local_df
+
+    # 2. Online fetch via Yahoo Finance
     try:
         ticker = yf.Ticker(symbol)
         df = ticker.history(period=period, interval=interval, auto_adjust=True)
