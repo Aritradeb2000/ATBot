@@ -144,8 +144,8 @@ def simulate_trades(
     df: pd.DataFrame,
     symbol: str,
     holding_days: int = 10,
-    target_atr_mult: float = 1.5,
-    stop_atr_mult: float = 1.5
+    target_atr_mult: float = 2.0,
+    stop_atr_mult: float = 1.2
 ) -> List[dict]:
     """
     Simulates trades for signals generated in df.
@@ -242,7 +242,7 @@ def simulate_trades(
 
 def run_full_backtest(
     sample_size: Optional[int] = None,
-    start_year: int = 2021,
+    start_year: int = 2017,
     holding_days: int = 10
 ) -> pd.DataFrame:
     """
