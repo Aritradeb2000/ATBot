@@ -24,6 +24,28 @@ NSE_HEADERS = {
 }
 
 
+# ── Utilities ─────────────────────────────────────────────────────────────
+
+def _parse_crore(value: str) -> float:
+    """Parse NSE's crore value string to float."""
+    try:
+        return float(str(value).replace(",", "").strip())
+    except (ValueError, AttributeError):
+        return 0.0
+
+
+def nse_to_yfinance(symbol: str) -> str:
+    """Convert plain NSE symbol to yfinance format. e.g. RELIANCE → RELIANCE.NS"""
+    if not symbol.endswith((".NS", ".BO")):
+        return f"{symbol}.NS"
+    return symbol
+
+
+def yfinance_to_nse(symbol: str) -> str:
+    """Convert yfinance symbol to plain NSE symbol. e.g. RELIANCE.NS → RELIANCE"""
+    return symbol.replace(".NS", "").replace(".BO", "").strip()
+
+
 # ── NSE Session (handles cookies) ────────────────────────────────────────
 
 class NSESession:
@@ -35,26 +57,35 @@ class NSESession:
         self._init_session()
 
     def _init_session(self):
-        """Visit NSE homepage to get session cookies."""
+        """Visit NSE homepage with browser-like headers to get session cookies."""
         try:
-            self.session.get(NSE_BASE, timeout=10)
+            init_headers = dict(NSE_HEADERS)
+            init_headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+            self.session.get(NSE_BASE, headers=init_headers, timeout=10)
         except Exception as e:
-            logger.warning(f"NSE session init failed: {e}")
+            logger.debug(f"NSE session init notice: {e}")
 
     def get(self, url: str, params: dict = None) -> Optional[dict]:
-        """Make a GET request to NSE API."""
+        """Make a GET request to NSE API with automatic cookie recovery on 401/403."""
+        resp = None
         try:
             resp = self.session.get(url, params=params, timeout=10)
+            if resp.status_code in (401, 403):
+                # Session expired or blocked by bot guard — refresh cookies once
+                self._init_session()
+                resp = self.session.get(url, params=params, timeout=10)
+
             resp.raise_for_status()
             return resp.json()
         except requests.exceptions.HTTPError as e:
-            if resp.status_code == 401:
-                # Session expired — reinit
-                logger.info("NSE session expired, reinitializing...")
-                self._init_session()
-            logger.error(f"NSE API error: {e}")
+            # 403 Forbidden is NSE's Cloudflare / Akamai bot protection on high-frequency scraping.
+            # Log as warning so it doesn't flood errors_YYYY-MM-DD.log for optional delivery/quote data.
+            if resp is not None and resp.status_code == 403:
+                logger.warning(f"NSE API 403 (Rate-limit / bot protection) for {url}: {e}")
+            else:
+                logger.warning(f"NSE API HTTP error for {url}: {e}")
         except Exception as e:
-            logger.error(f"NSE request failed: {e}")
+            logger.warning(f"NSE request failed for {url}: {e}")
         return None
 
 
@@ -67,14 +98,15 @@ _nse_session = NSESession()
 def get_live_quote(symbol: str) -> Optional[dict]:
     """
     Get live quote for an NSE symbol.
-    symbol: plain NSE symbol e.g. "RELIANCE" (no .NS suffix)
+    symbol: plain NSE symbol or yfinance ticker (auto-stripped) e.g. "RELIANCE.NS" or "RELIANCE"
 
     Returns dict with: lastPrice, change, pChange, open, high, low,
                        previousClose, volume, deliveryVolume, deliveryPct
     """
+    clean_sym = yfinance_to_nse(symbol).upper()
     try:
         url = f"{NSE_BASE}/api/quote-equity"
-        data = _nse_session.get(url, params={"symbol": symbol.upper()})
+        data = _nse_session.get(url, params={"symbol": clean_sym})
 
         if not data:
             return None
@@ -83,7 +115,7 @@ def get_live_quote(symbol: str) -> Optional[dict]:
         trade_info = data.get("tradeInfo", {})
 
         return {
-            "symbol": symbol.upper(),
+            "symbol": clean_sym,
             "last_price": price_info.get("lastPrice"),
             "open": price_info.get("open"),
             "high": price_info.get("intraDayHighLow", {}).get("max"),
@@ -99,7 +131,7 @@ def get_live_quote(symbol: str) -> Optional[dict]:
         }
 
     except Exception as e:
-        logger.error(f"Live quote failed for {symbol}: {e}")
+        logger.warning(f"Live quote failed for {symbol}: {e}")
         return None
 
 
@@ -108,22 +140,25 @@ def get_delivery_data(symbol: str) -> Optional[dict]:
     Get delivery volume percentage for a symbol.
     High delivery % (>50%) = strong conviction buying signal.
     """
+    clean_sym = yfinance_to_nse(symbol).upper()
     try:
         url = f"{NSE_BASE}/api/quote-equity"
-        data = _nse_session.get(url, params={"symbol": symbol.upper(), "section": "trade_info"})
+        data = _nse_session.get(url, params={"symbol": clean_sym, "section": "trade_info"})
 
         if not data:
             return None
 
         trade_info = data.get("marketDeptOrderBook", {}).get("tradeInfo", {})
         return {
-            "symbol": symbol.upper(),
+            "symbol": clean_sym,
             "delivery_quantity": trade_info.get("deliveryQuantity"),
             "delivery_pct": trade_info.get("deliveryToTradedQuantity"),
         }
     except Exception as e:
-        logger.error(f"Delivery data failed for {symbol}: {e}")
+        logger.warning(f"Delivery data failed for {symbol}: {e}")
         return None
+
+
 
 
 # ── Market Breadth ────────────────────────────────────────────────────────
@@ -287,25 +322,3 @@ def get_india_vix() -> Optional[dict]:
     except Exception as e:
         logger.error(f"India VIX fetch failed: {e}")
         return None
-
-
-# ── Utilities ─────────────────────────────────────────────────────────────
-
-def _parse_crore(value: str) -> float:
-    """Parse NSE's crore value string to float."""
-    try:
-        return float(str(value).replace(",", "").strip())
-    except (ValueError, AttributeError):
-        return 0.0
-
-
-def nse_to_yfinance(symbol: str) -> str:
-    """Convert plain NSE symbol to yfinance format. e.g. RELIANCE → RELIANCE.NS"""
-    if not symbol.endswith((".NS", ".BO")):
-        return f"{symbol}.NS"
-    return symbol
-
-
-def yfinance_to_nse(symbol: str) -> str:
-    """Convert yfinance symbol to plain NSE symbol. e.g. RELIANCE.NS → RELIANCE"""
-    return symbol.replace(".NS", "").replace(".BO", "")
