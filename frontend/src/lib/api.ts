@@ -1,34 +1,11 @@
 import axios from "axios";
 
-/**
- * Resolves API Base URL:
- * - Server-side (SSR / Server Functions): reads BACKEND_URL injected by Vercel service binding
- * - Client-side (Browser on deployed domain): relative URL "" (proxied via Vercel rewrites to backend)
- * - Local development: falls back to http://localhost:8000
- */
-export function getApiBaseUrl(): string {
-  if (typeof window === "undefined") {
-    return process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-  }
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
-  if (typeof window !== "undefined" && window.location.hostname === "localhost" && window.location.port === "3000") {
-    return "http://localhost:8000";
-  }
-  return "";
-}
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export const api = axios.create({
+  baseURL: API_BASE,
   timeout: 60000,
   headers: { "Content-Type": "application/json" },
-});
-
-api.interceptors.request.use((config) => {
-  if (!config.baseURL) {
-    config.baseURL = getApiBaseUrl();
-  }
-  return config;
 });
 
 // ── Types ────────────────────────────────────────────────────────────────────

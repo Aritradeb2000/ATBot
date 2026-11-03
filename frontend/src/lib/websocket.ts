@@ -1,17 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
 
-function getWsUrl(): string {
-  if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
-  if (typeof window !== "undefined") {
-    if (window.location.hostname === "localhost" && window.location.port === "3000") {
-      return "ws://localhost:8000/ws/live";
-    }
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${proto}//${window.location.host}/ws/live`;
-  }
-  return "ws://localhost:8000/ws/live";
-}
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws/live";
 
 export interface LiveTick {
   type: string;
@@ -28,7 +18,7 @@ export function useMarketStream() {
   const connect = useCallback(() => {
     if (ws.current?.readyState === WebSocket.OPEN) return;
 
-    ws.current = new WebSocket(getWsUrl());
+    ws.current = new WebSocket(WS_URL);
 
     ws.current.onopen = () => {
       setConnected(true);
