@@ -6,24 +6,12 @@ import Link from "next/link";
 import StockCard from "@/components/ui/StockCard";
 import SignalBadge from "@/components/ui/SignalBadge";
 import MorningBriefingPanel from "@/components/ui/MorningBriefingPanel";
-import { analyzeStock, getMarketOverview, type MarketOverview, type AnalysisResult } from "@/lib/api";
+import { analyzeStock, getMarketOverview, getTopSignals, type MarketOverview, type AnalysisResult, type TopSignalsResponse } from "@/lib/api";
 
 // Default fallback watchlist if local storage is empty
 const DEFAULT_WATCHLIST = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ITC.NS", "KOTAKBANK.NS"];
 
-// Types for the Top Buy Signals panel
-interface TopSignal {
-  symbol: string; ticker: string; score: number; signal: "STRONG BUY" | "BUY" | "HOLD" | "SELL" | "STRONG SELL";
-  confidence: number; regime: string; price: number | null;
-  stop_loss: number | null; target_base_5d: number | null;
-  components: { technical: number; fundamental: number; sentiment: number };
-  active_signals: string[];
-  computed_at: string | null;
-}
-interface TopSignalsResponse {
-  count: number; universe: string; data_source: string;
-  last_computed: string | null; results: TopSignal[];
-}
+// Types imported from @/lib/api
 
 function WatchlistCard({ symbol, index, onRemove }: { symbol: string, index: number, onRemove: (s: string) => void }) {
   const { data, error, isLoading } = useSWR<AnalysisResult>(
@@ -181,7 +169,7 @@ export default function DashboardPage() {
   const { data: marketData } = useSWR<MarketOverview>("market-overview", getMarketOverview, { refreshInterval: 60000 });
   const { data: topSignalsData } = useSWR<TopSignalsResponse>(
     "top-signals-panel",
-    () => fetch("http://localhost:8000/api/screener/top-signals?limit=5").then(r => r.json()),
+    () => getTopSignals(5),
     { revalidateOnFocus: false, refreshInterval: 300000 }
   );
 

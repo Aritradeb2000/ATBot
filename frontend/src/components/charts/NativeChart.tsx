@@ -4,11 +4,32 @@ import { marketApi } from '@/lib/api';
 
 interface NativeChartProps {
     symbol: string;
+    period?: string;
+    interval?: string;
+    height?: number;
+    targets?: {
+        stopLoss: number;
+        conservative: number;
+        base: number;
+        aggressive: number;
+    };
 }
 
-export const NativeChart: React.FC<NativeChartProps> = ({ symbol }) => {
+export const NativeChart: React.FC<NativeChartProps> = ({ 
+    symbol, 
+    period: propPeriod, 
+    interval: propInterval, 
+    height, 
+    
+}) => {
     const chartContainerRef = useRef<HTMLDivElement>(null);
-    const [interval, setInterval] = useState<string>('1d');
+    const [interval, setInterval] = useState<string>(propInterval || '1d');
+
+    useEffect(() => {
+        if (propInterval) {
+            setInterval(propInterval);
+        }
+    }, [propInterval]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -74,8 +95,10 @@ export const NativeChart: React.FC<NativeChartProps> = ({ symbol }) => {
                 type: 'volume',
             },
             priceScaleId: '', // set as an overlay by setting a blank priceScaleId
+        });
+        chart.priceScale('').applyOptions({
             scaleMargins: {
-                top: 0.8, // highest point of the series will be at 80% of the chart
+                top: 0.8,
                 bottom: 0,
             },
         });
@@ -105,7 +128,7 @@ export const NativeChart: React.FC<NativeChartProps> = ({ symbol }) => {
             setError(null);
             try {
                 // Determine maximum period allowed by backend mapping
-                let period = 'max';
+                const period = propPeriod || 'max';
                 
                 const response = await marketApi.getOHLCV(symbol, period, interval);
                 
@@ -143,7 +166,7 @@ export const NativeChart: React.FC<NativeChartProps> = ({ symbol }) => {
         return () => {
             isMounted = false;
         };
-    }, [symbol, interval]);
+    }, [symbol, interval, propPeriod]);
 
     const intervals = [
         { label: '5m', value: '5m' },
@@ -155,7 +178,7 @@ export const NativeChart: React.FC<NativeChartProps> = ({ symbol }) => {
     ];
 
     return (
-        <div className="relative w-full h-[500px] bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
+        <div style={{ height: height || 500 }} className="relative w-full bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                 <div className="flex items-center space-x-4">
                     <h3 className="font-bold text-gray-900 dark:text-white text-lg">{symbol}</h3>

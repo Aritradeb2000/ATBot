@@ -1,11 +1,34 @@
 import axios from "axios";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+/**
+ * Resolves API Base URL:
+ * - Server-side (SSR / Server Functions): reads BACKEND_URL injected by Vercel service binding
+ * - Client-side (Browser on deployed domain): relative URL "" (proxied via Vercel rewrites to backend)
+ * - Local development: falls back to http://localhost:8000
+ */
+export function getApiBaseUrl(): string {
+  if (typeof window === "undefined") {
+    return process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  }
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  if (typeof window !== "undefined" && window.location.hostname === "localhost" && window.location.port === "3000") {
+    return "http://localhost:8000";
+  }
+  return "";
+}
 
 export const api = axios.create({
-  baseURL: API_BASE,
   timeout: 60000,
   headers: { "Content-Type": "application/json" },
+});
+
+api.interceptors.request.use((config) => {
+  if (!config.baseURL) {
+    config.baseURL = getApiBaseUrl();
+  }
+  return config;
 });
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -229,3 +252,31 @@ export const marketApi = {
     return res.data;
   }
 };
+
+export interface TopSignal {
+  symbol: string;
+  ticker: string;
+  score: number;
+  signal: "STRONG BUY" | "BUY" | "HOLD" | "SELL" | "STRONG SELL";
+  confidence: number;
+  regime: string;
+  price: number | null;
+  stop_loss: number | null;
+  target_base_5d: number | null;
+  components: { technical: number; fundamental: number; sentiment: number };
+  active_signals: string[];
+  computed_at: string | null;
+}
+
+export interface TopSignalsResponse {
+  count: number;
+  universe: string;
+  data_source: string;
+  last_computed: string | null;
+  results: TopSignal[];
+}
+
+export async function getTopSignals(limit = 5): Promise<TopSignalsResponse> {
+  const res = await api.get('/api/screener/top-signals', { params: { limit } });
+  return res.data;
+}
