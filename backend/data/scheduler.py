@@ -391,7 +391,7 @@ async def job_daily_screener():
                     except:
                         pass
                         
-                tech_result  = analyze_technical(ohlcv_df, delivery_pct=delivery_pct)
+                tech_result  = analyze_technical(ohlcv_df, delivery_pct=delivery_pct, nifty_change_20d=nifty_change_20d)
                 fund_result  = analyze_fundamental(fundamentals)
                 sent_result  = analyze_sentiment(news, fii_dii)
 
@@ -550,7 +550,7 @@ async def job_nightly_precompute(universe_name: str = "nifty200"):
                 except:
                     pass
 
-            tech_result  = analyze_technical(ohlcv_df, delivery_pct=delivery_pct)
+            tech_result  = analyze_technical(ohlcv_df, delivery_pct=delivery_pct, nifty_change_20d=nifty_change_20d)
             fund_result  = analyze_fundamental(fundamentals)
             sent_result  = analyze_sentiment(news, fii_dii)
 

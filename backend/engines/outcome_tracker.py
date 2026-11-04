@@ -89,35 +89,59 @@ def _evaluate_trailing_stop(symbol: str, entry_date, check_day: int, entry_price
             return None, None, None, None, None
 
         current_stop = stop_loss
+        hit_breakeven_guard = False
+
         for idx, row in hist.iterrows():
             high = row["High"]
             low = row["Low"]
             close = row["Close"]
             
             if is_buy:
+                # Move stop to breakeven once conservative target 1 is touched
+                if target_conservative and high >= target_conservative:
+                    current_stop = max(current_stop, entry_price)
+                    hit_breakeven_guard = True
+
                 if low <= current_stop:
                     exit_price = min(row["Open"], current_stop)
                     pnl_amt = exit_price - entry_price
                     pnl_pct = (pnl_amt / entry_price) * 100
-                    return ("WIN" if pnl_pct > 0 else "LOSS"), pnl_pct, pnl_amt, idx, exit_price
-                
-                if target_conservative and high >= target_conservative:
-                    current_stop = max(current_stop, entry_price)
+                    if abs(pnl_pct) <= 0.5 or (hit_breakeven_guard and exit_price >= entry_price * 0.995):
+                        outcome_label = "BREAKEVEN"
+                    elif pnl_pct > 0:
+                        outcome_label = "WIN"
+                    else:
+                        outcome_label = "LOSS"
+                    return outcome_label, pnl_pct, pnl_amt, idx, exit_price
             else:
+                # Move short stop to breakeven once conservative target 1 is touched
+                if target_conservative and low <= target_conservative:
+                    current_stop = min(current_stop, entry_price)
+                    hit_breakeven_guard = True
+
                 if high >= current_stop:
                     exit_price = max(row["Open"], current_stop)
                     pnl_amt = entry_price - exit_price
                     pnl_pct = (pnl_amt / entry_price) * 100
-                    return ("WIN" if pnl_pct > 0 else "LOSS"), pnl_pct, pnl_amt, idx, exit_price
-                
-                if target_conservative and low <= target_conservative:
-                    current_stop = min(current_stop, entry_price)
+                    if abs(pnl_pct) <= 0.5 or (hit_breakeven_guard and exit_price <= entry_price * 1.005):
+                        outcome_label = "BREAKEVEN"
+                    elif pnl_pct > 0:
+                        outcome_label = "WIN"
+                    else:
+                        outcome_label = "LOSS"
+                    return outcome_label, pnl_pct, pnl_amt, idx, exit_price
                     
         last_date = hist.index[-1]
         last_close = float(hist["Close"].iloc[-1])
         pnl_amt = (last_close - entry_price) if is_buy else (entry_price - last_close)
         pnl_pct = (pnl_amt / entry_price) * 100
-        return ("WIN" if pnl_pct > 0 else "LOSS"), pnl_pct, pnl_amt, last_date, last_close
+        if abs(pnl_pct) <= 0.5:
+            outcome_label = "BREAKEVEN"
+        elif pnl_pct > 0:
+            outcome_label = "WIN"
+        else:
+            outcome_label = "LOSS"
+        return outcome_label, pnl_pct, pnl_amt, last_date, last_close
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)

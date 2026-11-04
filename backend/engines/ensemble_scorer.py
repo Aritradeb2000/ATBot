@@ -376,6 +376,13 @@ def calculate_composite(
                 signal = "HOLD"
                 logger.info(f"[Ensemble] AI XGBoost filter downgraded weak BUY to HOLD (P={ai_eval.get('win_prob')})")
 
+    # ── Weekly Multi-Timeframe (MTF) Counter-Trend Guard ──────────────────────
+    weekly_trend = tech_data.get("weekly_trend")
+    if weekly_trend == "BEARISH" and (is_buy_shadow or signal in ["BUY", "STRONG BUY"]):
+        if comp_score < 80:
+            logger.info(f"[Ensemble] MTF counter-trend filter downgraded weak BUY to HOLD (Weekly trend is BEARISH)")
+            signal = "HOLD"
+
     # ── Confidence ────────────────────────────────────────────────────────────
     active_scores = [s for s, has in [(t_score, t_has_data), (f_score, f_has_data), (s_score, s_has_data)] if has]
 
@@ -389,12 +396,46 @@ def calculate_composite(
             confidence = min(98.0, confidence + 12.0)
         elif ai_eval.get("verdict") == "LOW_PROBABILITY":
             confidence = max(20.0, confidence - 15.0)
+
+        rs_20d = tech_data.get("rs_20d")
+        if rs_20d is not None:
+            if rs_20d >= 6.0:
+                confidence = min(98.0, confidence + 5.0)
+            elif rs_20d <= -6.0:
+                confidence = max(20.0, confidence - 8.0)
         if missing_engines > 0:
             confidence = min(confidence, 100 - (missing_engines * 25))
     elif len(active_scores) == 1:
         confidence = 30
     else:
         confidence = 20
+
+    # ── Dynamic Execution Plan (Breakeven + Trailing Stop Architecture) ───────
+    execution_plan = None
+    if current_price and targets_5d and stop_loss and (is_buy_shadow or is_sell_shadow):
+        if is_buy_shadow:
+            rules = [
+                f"1. Breakeven Trigger: Shift Stop Loss to Breakeven (₹{current_price:.2f}) immediately upon touching Target 1 (₹{targets_5d['conservative']:.2f}) to eliminate downside risk.",
+                f"2. Stage 2 Partial Profit: Book 50% profit at Target 2 (₹{targets_5d['base']:.2f}) and trail Stop Loss to Target 1.",
+                f"3. Runner Continuation: Trail remaining 50% position toward Target 3 (₹{targets_5d['aggressive']:.2f}) using a 1.5x ATR trailing stop."
+            ]
+        else:
+            rules = [
+                f"1. Breakeven Trigger: Shift Stop Loss to Breakeven (₹{current_price:.2f}) immediately upon touching Short Target 1 (₹{targets_5d['conservative']:.2f}) to eliminate upside risk.",
+                f"2. Stage 2 Partial Cover: Buy back 50% short position at Target 2 (₹{targets_5d['base']:.2f}) and trail Stop Loss down to Target 1.",
+                f"3. Runner Continuation: Trail remaining 50% short position toward Target 3 (₹{targets_5d['aggressive']:.2f}) using a 1.5x ATR trailing stop."
+            ]
+
+        execution_plan = {
+            "entry_price": current_price,
+            "initial_stop": stop_loss,
+            "breakeven_trigger": targets_5d["conservative"],
+            "stage2_target": targets_5d["base"],
+            "runner_target": targets_5d["aggressive"],
+            "risk_per_share": round(abs(current_price - stop_loss), 2),
+            "risk_reward": rr_ratio,
+            "trailing_rules": rules,
+        }
 
     # ── Position Sizing — visible BUY only (never shadow) ────────────────────
     position_sizing = None
@@ -436,6 +477,9 @@ def calculate_composite(
         "targets_100d": targets_100d if targets_100d else None,
         "stop_loss": stop_loss,
         "risk_reward": rr_ratio,
+        "execution_plan": execution_plan,
+        "weekly_trend": weekly_trend,
+        "rs_20d": tech_data.get("rs_20d"),
         "position_sizing": position_sizing,
         "weights_used": weights,
         "weights_source": weights_source,
