@@ -105,6 +105,7 @@ SIGNAL_THRESHOLDS = {
 
 # ── RSS News Feeds ────────────────────────────────────────────────────────
 NEWS_RSS_FEEDS = {
+    "zerodha_pulse": "https://pulse.zerodha.com/feed.xml",
     "economic_times_markets": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
     "economic_times_stocks": "https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms",
     "livemint_markets": "https://www.livemint.com/rss/markets",

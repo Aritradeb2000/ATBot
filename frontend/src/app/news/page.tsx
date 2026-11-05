@@ -1,39 +1,43 @@
-﻿"use client";
+"use client";
 import useSWR from "swr";
 import { motion } from "framer-motion";
 import { getMarketNews, type NewsArticle } from "@/lib/api";
 import { useState } from "react";
 
-const fetcher = (limit: number) => getMarketNews(limit);
-
 export default function NewsPage() {
-  const [activeTab, setActiveTab] = useState<"market" | "my-stocks">("market");
+  const [activeTab, setActiveTab] = useState<"market" | "pulse" | "my-stocks">("market");
   const { data: articles, isLoading } = useSWR<NewsArticle[]>(
     "market-news",
-    () => getMarketNews(100),
+    () => getMarketNews(150),
     { refreshInterval: 60000 }
   );
 
   const tabs = [
-    { id: "market" as const,    label: "📰 Market News" },
+    { id: "market" as const,    label: "📰 All Market News" },
+    { id: "pulse" as const,     label: "⚡ Zerodha Pulse" },
     { id: "my-stocks" as const, label: "⭐ My Stocks" },
   ];
 
   const displayArticles = articles ?? [];
   const myStockSymbols = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"];
+  
   const filtered = activeTab === "my-stocks"
     ? displayArticles.filter((a) => a.symbol && myStockSymbols.includes(a.symbol))
+    : activeTab === "pulse"
+    ? displayArticles.filter((a) => a.source && a.source.toLowerCase().includes("pulse"))
     : displayArticles;
 
   return (
     <div style={{ maxWidth: 900 }}>
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)", marginBottom: 4 }}>News Feed</h1>
-        <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 24 }}>Live market news from Economic Times, Moneycontrol & Finnhub</p>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 24 }}>
+          Live market news from Zerodha Pulse, Economic Times, LiveMint & Business Standard
+        </p>
       </motion.div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid var(--border)", paddingBottom: 12 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid var(--border)", paddingBottom: 12, alignItems: "center" }}>
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -53,11 +57,36 @@ export default function NewsPage() {
           </button>
         ))}
         {articles && (
-          <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-muted)", alignSelf: "center" }}>
+          <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-muted)" }}>
             {filtered.length} articles
           </span>
         )}
       </div>
+
+      {activeTab === "pulse" && (
+        <div style={{
+          background: "rgba(59, 130, 246, 0.08)",
+          border: "1px solid rgba(59, 130, 246, 0.2)",
+          borderRadius: 8,
+          padding: "10px 14px",
+          marginBottom: 16,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          fontSize: 12,
+          color: "var(--text-secondary)"
+        }}>
+          <span>⚡ Curated real-time feed aggregated from <strong>pulse.zerodha.com</strong></span>
+          <a
+            href="https://pulse.zerodha.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "#3b82f6", textDecoration: "none", fontWeight: 600 }}
+          >
+            Visit Pulse ↗
+          </a>
+        </div>
+      )}
 
       {/* Articles */}
       {isLoading ? (
@@ -70,6 +99,8 @@ export default function NewsPage() {
           <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>
             {activeTab === "my-stocks"
               ? "No news found for your watchlist stocks. Backend may be fetching..."
+              : activeTab === "pulse"
+              ? "No Pulse articles loaded yet. The feed refreshes every 10 minutes."
               : "No articles loaded yet. The news feed refreshes every 10 minutes."}
           </p>
         </div>

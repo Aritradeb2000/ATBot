@@ -20,7 +20,7 @@ from backend.data.market_data import (
     fetch_global_cues, is_market_open
 )
 from backend.data.nse_live import get_fii_dii_data, get_market_breadth, get_india_vix
-from backend.data.news_feed import fetch_newsapi_news, fetch_all_rss_feeds
+from backend.data.news_feed import fetch_newsapi_news, fetch_all_rss_feeds, match_articles_to_symbols
 from backend.data.fundamentals import fetch_fundamentals, get_upcoming_earnings
 from backend.engines.outcome_tracker import run_outcome_check
 from backend.engines.meta_learner import compute_and_save_adaptive_weights, get_current_adaptive_weights
@@ -114,6 +114,7 @@ async def job_refresh_news():
     logger.info("📰 [Scheduler] Refreshing news feeds...")
     try:
         articles = fetch_all_rss_feeds()
+        articles = match_articles_to_symbols(articles)
         # Prepend new articles, keep last 500
         existing_ids = {a["id"] for a in _cache["news"]}
         new_articles = [a for a in articles if a["id"] not in existing_ids]

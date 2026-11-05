@@ -106,6 +106,11 @@ export async function getStockNews(symbol: string, limit = 10): Promise<NewsArti
   return res.data;
 }
 
+export async function getPulseNews(symbol?: string, limit = 50): Promise<NewsArticle[]> {
+  const res = await api.get("/api/news/pulse", { params: { symbol, limit } });
+  return res.data;
+}
+
 export async function getMarketOverview(): Promise<MarketOverview> {
   const res = await api.get("/api/market/overview");
   return res.data;
