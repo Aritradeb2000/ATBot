@@ -266,7 +266,7 @@ async def run_optimizer(
     else:
         scan_symbols = NIFTY50_SYMBOLS
 
-    logger.info(f"🔎 Optimizer: scanning {len(scan_symbols)} stocks | profile={risk_profile} | amount=₹{amount:,.0f}")
+    logger.info(f"Optimizer: scanning {len(scan_symbols)} stocks | profile={risk_profile} | amount=₹{amount:,.0f}")
 
     # Scan universe
     candidates = await _scan_universe(scan_symbols, cache)

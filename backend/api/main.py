@@ -31,7 +31,7 @@ request_logger = get_request_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle events: Startup and Shutdown."""
-    logger.info(f"🚀 Starting {settings.app_name} v{settings.app_version}...")
+    logger.info(f"Starting {settings.app_name} v{settings.app_version}...")
 
     # 1. Initialize Database
     await init_db()
@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     scheduler.start()
 
     # 3. Eagerly warm the cache so the frontend gets data immediately
-    logger.info("⚡ Warming cache on startup...")
+    logger.info("Warming cache on startup...")
     await job_refresh_index_data()
     await job_refresh_news()
     await job_refresh_fii_dii()
@@ -51,11 +51,11 @@ async def lifespan(app: FastAPI):
         saved_weights = await get_current_adaptive_weights()
         if saved_weights:
             set_adaptive_weights(saved_weights)
-            logger.info(f"🧠 Loaded adaptive weights from DB: T={saved_weights.get('T')} F={saved_weights.get('F')} S={saved_weights.get('S')}")
+            logger.info(f"Loaded adaptive weights from DB: T={saved_weights.get('T')} F={saved_weights.get('F')} S={saved_weights.get('S')}")
         else:
-            logger.info("🧠 No adaptive weights found — using regime-based defaults until meta-learner runs")
+            logger.info("No adaptive weights found — using regime-based defaults until meta-learner runs")
     except Exception as e:
-        logger.warning(f"⚠️ Could not load adaptive weights: {e}")
+        logger.warning(f"Could not load adaptive weights: {e}")
 
     # 4b. Bootstrap the SIDEWAYS kill switch IN-PROCESS.
     # Without this, _sideways_kill_state stays empty after every server
@@ -67,11 +67,11 @@ async def lifespan(app: FastAPI):
         from backend.engines.ensemble_scorer import set_sideways_win_rate
         wr, n = await refresh_sideways_win_rate(days=30)
         set_sideways_win_rate(wr, n)
-        logger.info(f"🛑 [Startup] Kill switch bootstrapped: win_rate={wr}, n={n}")
+        logger.info(f"[Startup] Kill switch bootstrapped: win_rate={wr}, n={n}")
     except Exception as e:
-        logger.warning(f"⚠️ Could not bootstrap kill switch: {e}")
+        logger.warning(f"Could not bootstrap kill switch: {e}")
 
-    logger.info("✅ Cache warm — ready to serve!")
+    logger.info("Cache warm — ready to serve!")
 
     # 5. Catch-up missed jobs (outcome check, report, precompute) if server
     #    was offline at their scheduled time. Runs in background so startup
@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
     yield  # Application runs while yielded
 
     # Shutdown
-    logger.info("🛑 Shutting down...")
+    logger.info("Shutting down...")
     scheduler.shutdown()
 
 

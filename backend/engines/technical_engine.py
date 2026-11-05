@@ -271,7 +271,7 @@ def analyze_technical(df: pd.DataFrame, delivery_pct: float = None, nifty_change
                 latest.get("EMA_200") is not None and pd.notna(latest["EMA_200"])):
             if prev["EMA_50"] <= prev["EMA_200"] and latest["EMA_50"] > latest["EMA_200"]:
                 trend_score += 15
-                signals.append("🔥 Golden Cross (50>200 EMA)")
+                signals.append("Golden Cross (50>200 EMA)")
 
         if pd.notna(latest.get("Supertrend_dir")):
             if latest["Supertrend_dir"] == 1:
@@ -321,10 +321,10 @@ def analyze_technical(df: pd.DataFrame, delivery_pct: float = None, nifty_change
         # [ENHANCEMENT 1] Weekly Multi-Timeframe Alignment
         if weekly_trend == "BULLISH":
             trend_score += 12
-            signals.append("🔥 MTF Alignment: Weekly & Daily Bullish Confirmed")
+            signals.append("MTF Alignment: Weekly & Daily Bullish Confirmed")
         elif weekly_trend == "BEARISH":
             trend_score -= 15
-            signals.append("⚠️ Counter-Trend Warning: Daily Buy against Weekly Downtrend")
+            signals.append("Counter-Trend Warning: Daily Buy against Weekly Downtrend")
 
         # [ENHANCEMENT 2] Mansfield Relative Strength (RS vs Nifty 50)
         if rs_20d >= 6.0:
@@ -352,28 +352,28 @@ def analyze_technical(df: pd.DataFrame, delivery_pct: float = None, nifty_change
                 signals.append("OBV Institutional Accumulation (Above 20-EMA)")
             elif close_px > df["Close"].iloc[-6] and obv_val < obv_ema_val and obv_slope_5d < 0:
                 trend_score -= 8
-                signals.append("⚠️ Bearish Volume Divergence: Price Up but OBV Down")
+                signals.append("Bearish Volume Divergence: Price Up but OBV Down")
             elif obv_val < obv_ema_val:
                 trend_score -= 4
 
         # [ENHANCEMENT 4] Volatility Contraction Pattern (VCP / Squeeze Breakout)
         if is_vcp_breakout:
             trend_score += 15
-            signals.append("🚀 Volatility Squeeze Expansion Breakout (VCP Fired)")
+            signals.append("Volatility Squeeze Expansion Breakout (VCP Fired)")
         elif is_vcp_squeeze:
-            signals.append("📦 Volatility Contraction (VCP Squeeze Active — Coiling for Breakout)")
+            signals.append("Volatility Contraction (VCP Squeeze Active — Coiling for Breakout)")
 
         # [ENHANCEMENT 5] Graded Delivery Conviction
         if delivery_pct is not None:
             if delivery_pct >= 60.0:
                 trend_score += 10
-                signals.append(f"🔥 Institutional Delivery Conviction ({delivery_pct:.1f}%)")
+                signals.append(f"Institutional Delivery Conviction ({delivery_pct:.1f}%)")
             elif delivery_pct >= 45.0:
                 trend_score += 5
                 signals.append(f"Solid Delivery Support ({delivery_pct:.1f}%)")
             elif delivery_pct < 25.0:
                 trend_score -= 8
-                signals.append(f"⚠️ Speculative Churn: Low Delivery ({delivery_pct:.1f}%)")
+                signals.append(f"Speculative Churn: Low Delivery ({delivery_pct:.1f}%)")
 
         # ═══ MEAN-REVERSION SUB-SCORE ═══════════════════════════════════════
         if pd.notna(rsi):

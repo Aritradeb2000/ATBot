@@ -76,7 +76,7 @@ async def job_refresh_market_data():
     if not is_market_open():
         return   # Skip outside market hours
 
-    logger.info("🔄 [Scheduler] Refreshing market data...")
+    logger.info("[Scheduler] Refreshing market data...")
     try:
         # Refresh Nifty 50 OHLCV
         data = fetch_multiple_ohlcv(NIFTY50_SYMBOLS[:10], interval="5m", period="1d")
@@ -87,10 +87,10 @@ async def job_refresh_market_data():
         _cache["indices"] = indices
 
         _cache["last_updated"]["market_data"] = datetime.now(IST).isoformat()
-        logger.info(f"✅ Market data refreshed — {len(data)} symbols updated")
+        logger.info(f"Market data refreshed — {len(data)} symbols updated")
 
     except Exception as e:
-        logger.error(f"❌ Market data refresh failed: {e}")
+        logger.error(f"Market data refresh failed: {e}")
 
 
 async def job_refresh_index_data():
@@ -101,7 +101,7 @@ async def job_refresh_index_data():
         _cache["market_breadth"] = get_market_breadth()
         _cache["last_updated"]["indices"] = datetime.now(IST).isoformat()
     except Exception as e:
-        logger.error(f"❌ Index refresh failed: {e}")
+        logger.error(f"Index refresh failed: {e}")
 
 
 # ── News Jobs ─────────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ async def job_refresh_news():
     Refresh news from all RSS feeds.
     Runs every 10 minutes continuously (not just market hours).
     """
-    logger.info("📰 [Scheduler] Refreshing news feeds...")
+    logger.info("[Scheduler] Refreshing news feeds...")
     try:
         articles = fetch_all_rss_feeds()
         articles = match_articles_to_symbols(articles)
@@ -121,12 +121,12 @@ async def job_refresh_news():
 
         if new_articles:
             _cache["news"] = (new_articles + _cache["news"])[:500]
-            logger.info(f"📰 Added {len(new_articles)} new articles")
+            logger.info(f"Added {len(new_articles)} new articles")
 
         _cache["last_updated"]["news"] = datetime.now(IST).isoformat()
 
     except Exception as e:
-        logger.error(f"❌ News refresh failed: {e}")
+        logger.error(f"News refresh failed: {e}")
 
 
 # ── Fundamentals Jobs ─────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ async def job_refresh_fundamentals():
     Refresh fundamental data for all Nifty 50 stocks.
     Runs daily at 6 PM IST after market close.
     """
-    logger.info("📊 [Scheduler] Refreshing fundamentals...")
+    logger.info("[Scheduler] Refreshing fundamentals...")
     count = 0
     for symbol in NIFTY50_SYMBOLS:
         try:
@@ -147,7 +147,7 @@ async def job_refresh_fundamentals():
         except Exception as e:
             logger.warning(f"Fundamentals failed for {symbol}: {e}")
 
-    logger.info(f"✅ Fundamentals refreshed for {count} symbols")
+    logger.info(f"Fundamentals refreshed for {count} symbols")
     _cache["last_updated"]["fundamentals"] = datetime.now(IST).isoformat()
 
 
@@ -157,12 +157,12 @@ async def job_refresh_fii_dii():
     Runs daily at 6:30 PM IST (NSE sometimes publishes late after market close).
     Persists to fii_dii_flow DB table for historical tracking.
     """
-    logger.info("🏦 [Scheduler] Refreshing FII/DII data...")
+    logger.info("[Scheduler] Refreshing FII/DII data...")
     try:
         data = get_fii_dii_data()
         if data:
             _cache["fii_dii"] = data
-            logger.info(f"✅ FII net: ₹{data.get('fii_net')} Cr | DII net: ₹{data.get('dii_net')} Cr")
+            logger.info(f"FII net: ₹{data.get('fii_net')} Cr | DII net: ₹{data.get('dii_net')} Cr")
 
             # ── Persist to DB ────────────────────────────────────────────
             from backend.models.database import AsyncSessionLocal
@@ -195,14 +195,14 @@ async def job_refresh_fii_dii():
                         dii_net  = data.get("dii_net"),
                     ))
                     await db.commit()
-                    logger.info(f"💾 FII/DII saved to DB for {record_date}")
+                    logger.info(f"FII/DII saved to DB for {record_date}")
                 else:
                     logger.info(f"  FII/DII already in DB for {record_date} — skipped")
 
 
         _cache["last_updated"]["fii_dii"] = datetime.now(IST).isoformat()
     except Exception as e:
-        logger.error(f"❌ FII/DII refresh failed: {e}")
+        logger.error(f"FII/DII refresh failed: {e}")
 
 
 # ── Earnings Job ──────────────────────────────────────────────────────────
@@ -212,15 +212,15 @@ async def job_refresh_earnings():
     Check upcoming earnings for the week.
     Runs daily at 9 AM IST.
     """
-    logger.info("📅 [Scheduler] Checking upcoming earnings...")
+    logger.info("[Scheduler] Checking upcoming earnings...")
     try:
         earnings = get_upcoming_earnings(NIFTY50_SYMBOLS)
         _cache["upcoming_earnings"] = earnings
         if earnings:
-            logger.info(f"📅 {len(earnings)} earnings events this week")
+            logger.info(f"{len(earnings)} earnings events this week")
         _cache["last_updated"]["earnings"] = datetime.now(IST).isoformat()
     except Exception as e:
-        logger.error(f"❌ Earnings refresh failed: {e}")
+        logger.error(f"Earnings refresh failed: {e}")
 
 
 # ── Morning Briefing Job ──────────────────────────────────────────────────
@@ -230,7 +230,7 @@ async def job_morning_briefing():
     Generate the daily morning briefing at 8:45 AM IST.
     Assembles: global cues, FII/DII, VIX, earnings, indices snapshot, top signals.
     """
-    logger.info("🌅 [Scheduler] Generating morning briefing...")
+    logger.info("[Scheduler] Generating morning briefing...")
     try:
         global_cues = fetch_global_cues()
         vix_data = get_india_vix()
@@ -272,7 +272,7 @@ async def job_morning_briefing():
                     for r in sorted(seen.values(), key=lambda x: -(x.composite_score or 0))[:8]
                 ]
         except Exception as e:
-            logger.warning(f"⚠ Could not fetch top signals for briefing: {e}")
+            logger.warning(f"Could not fetch top signals for briefing: {e}")
 
         briefing = {
             "generated_at": datetime.now(IST).isoformat(),
@@ -290,10 +290,10 @@ async def job_morning_briefing():
         }
 
         _cache["morning_briefing"] = briefing
-        logger.info("✅ Morning briefing generated")
+        logger.info("Morning briefing generated")
 
     except Exception as e:
-        logger.error(f"❌ Morning briefing failed: {e}")
+        logger.error(f"Morning briefing failed: {e}")
 
 
 def _generate_market_comment(vix_data: dict, fii_dii: dict) -> str:
@@ -329,7 +329,7 @@ async def job_daily_screener():
     → meta-learner adjusts weights automatically.
     No manual screener interaction needed from the user.
     """
-    logger.info("🤖 [Scheduler] Starting daily auto-screener (Nifty 200)...")
+    logger.info("[Scheduler] Starting daily auto-screener (Nifty 200)...")
     try:
         import asyncio
         from backend.data.market_data import fetch_ohlcv
@@ -456,10 +456,10 @@ async def job_daily_screener():
             logger.error(f"Portfolio allocation failed: {e}")
 
         _cache["last_updated"]["daily_screener"] = datetime.now(IST).isoformat()
-        logger.info(f"✅ Daily auto-screener complete — {saved} saved, {errors} skipped")
+        logger.info(f"Daily auto-screener complete — {saved} saved, {errors} skipped")
 
     except Exception as e:
-        logger.error(f"❌ Daily auto-screener failed: {e}")
+        logger.error(f"Daily auto-screener failed: {e}")
 
 
 # ── Nightly Pre-Computation Job ───────────────────────────────────────────────
@@ -499,7 +499,7 @@ async def job_nightly_precompute(universe_name: str = "nifty200"):
         "progress_pct": 0,
         "duration_s": None,
     })
-    logger.info(f"🌙 [Nightly] Pre-computation started: {len(symbols)} symbols ({universe_name})")
+    logger.info(f"[Nightly] Pre-computation started: {len(symbols)} symbols ({universe_name})")
 
     # Grab shared market context once
     cache        = _cache
@@ -612,11 +612,11 @@ async def job_nightly_precompute(universe_name: str = "nifty200"):
             "duration_s": duration,
         })
         _cache["last_updated"]["nightly_precompute"] = datetime.now(IST).isoformat()
-        logger.info(f"✅ Nightly pre-computation complete — {saved} saved, {skipped} skipped in {duration}s")
+        logger.info(f"Nightly pre-computation complete — {saved} saved, {skipped} skipped in {duration}s")
 
     except Exception as e:
         _cache["nightly_status"]["status"] = "failed"
-        logger.error(f"❌ Nightly pre-computation failed: {e}")
+        logger.error(f"Nightly pre-computation failed: {e}")
 
 
 # ── Outcome Tracking Job ──────────────────────────────────────────────────
@@ -628,13 +628,13 @@ async def job_check_signal_outcomes():
     After recording outcomes, also triggers the meta-learner.
     """
     import traceback
-    logger.info("📊 [Scheduler] Checking signal outcomes (D1/D2/D5/D10)...")
+    logger.info("[Scheduler] Checking signal outcomes (D1/D2/D5/D10)...")
     try:
         count = await run_outcome_check()
-        logger.info(f"✅ Signal outcomes: {count} new records written")
+        logger.info(f"Signal outcomes: {count} new records written")
         _cache["last_updated"]["signal_outcomes"] = datetime.now(IST).isoformat()
     except Exception as e:
-        logger.error(f"❌ Outcome check failed: {e}\n{traceback.format_exc()}")  # full traceback
+        logger.error(f"Outcome check failed: {e}\n{traceback.format_exc()}")  # full traceback
 
     # After outcomes are updated, re-run meta-learner to refresh adaptive weights
     try:
@@ -642,18 +642,18 @@ async def job_check_signal_outcomes():
         set_adaptive_weights(new_weights)
         _cache["adaptive_weights"] = new_weights
         _cache["last_updated"]["meta_learner"] = datetime.now(IST).isoformat()
-        logger.info("✅ Adaptive weights updated after outcome check")
+        logger.info("Adaptive weights updated after outcome check")
     except Exception as e:
-        logger.error(f"❌ Meta-learner failed: {e}")
+        logger.error(f"Meta-learner failed: {e}")
 
     # Auto-generate and save a PDF accuracy report for today's record
     try:
         from backend.engines.report_generator import generate_accuracy_report
         report_path = await generate_accuracy_report(days=90, check_day=10)
-        logger.info(f"📄 Daily accuracy report saved: {report_path}")
+        logger.info(f"Daily accuracy report saved: {report_path}")
         _cache["last_updated"]["daily_report"] = datetime.now(IST).isoformat()
     except Exception as e:
-        logger.error(f"❌ Daily report generation failed: {e}")
+        logger.error(f"Daily report generation failed: {e}")
 
 
 # ── Startup Catch-Up ──────────────────────────────────────────────────────────
@@ -680,10 +680,10 @@ async def startup_catchup():
 
     # Only catch-up on weekdays (markets closed Sat/Sun)
     if weekday >= 5:
-        logger.info("🟡 [Catchup] Weekend — skipping startup catch-up")
+        logger.info("[Catchup] Weekend — skipping startup catch-up")
         return
 
-    logger.info(f"🔍 [Catchup] Checking for missed jobs on {today} (current time: {now.strftime('%H:%M')} IST)...")
+    logger.info(f"[Catchup] Checking for missed jobs on {today} (current time: {now.strftime('%H:%M')} IST)...")
 
     async def _has_analysis_scores_today() -> bool:
         """True if any AnalysisScore was saved today in IST."""
@@ -707,11 +707,11 @@ async def startup_catchup():
     if now >= screener_scheduled:
         has_scores = await _has_analysis_scores_today()
         if not has_scores:
-            logger.warning("⚡ [Catchup] Daily screener missed — firing now")
+            logger.warning("[Catchup] Daily screener missed — firing now")
             asyncio.create_task(job_daily_screener())
             tasks_fired.append("job_daily_screener")
         else:
-            logger.info("✅ [Catchup] Daily screener already ran today")
+            logger.info("[Catchup] Daily screener already ran today")
 
     # ── 4:00 PM: Nightly Pre-Compute ─────────────────────────────────────
     precompute_scheduled = now.replace(hour=16, minute=0, second=0, microsecond=0)
@@ -735,11 +735,11 @@ async def startup_catchup():
                 except Exception:
                     pass
         if not already_ran:
-            logger.warning("⚡ [Catchup] Nightly pre-compute missed — firing now")
+            logger.warning("[Catchup] Nightly pre-compute missed — firing now")
             asyncio.create_task(job_nightly_precompute())
             tasks_fired.append("job_nightly_precompute")
         else:
-            logger.info("✅ [Catchup] Nightly pre-compute already ran today")
+            logger.info("[Catchup] Nightly pre-compute already ran today")
 
     # ── 6:30 PM: Outcome Check + Report ──────────────────────────────────
     outcomes_scheduled = now.replace(hour=18, minute=30, second=0, microsecond=0)
@@ -753,16 +753,16 @@ async def startup_catchup():
             except Exception:
                 pass
         if not already_ran:
-            logger.warning("⚡ [Catchup] Outcome check + report missed — firing now")
+            logger.warning("[Catchup] Outcome check + report missed — firing now")
             asyncio.create_task(job_check_signal_outcomes())
             tasks_fired.append("job_check_signal_outcomes")
         else:
-            logger.info("✅ [Catchup] Outcome check already ran today")
+            logger.info("[Catchup] Outcome check already ran today")
 
     if tasks_fired:
-        logger.info(f"🚀 [Catchup] Fired {len(tasks_fired)} missed job(s): {', '.join(tasks_fired)}")
+        logger.info(f"[Catchup] Fired {len(tasks_fired)} missed job(s): {', '.join(tasks_fired)}")
     else:
-        logger.info("✅ [Catchup] All scheduled jobs are up-to-date — nothing to catch up")
+        logger.info("[Catchup] All scheduled jobs are up-to-date — nothing to catch up")
 
 
 # ── Scheduler Setup ───────────────────────────────────────────────────────
@@ -881,7 +881,7 @@ def setup_scheduler():
         replace_existing=True,
     )
 
-    logger.info("✅ All scheduler jobs registered and initial syncs triggered")
+    logger.info("All scheduler jobs registered and initial syncs triggered")
     return scheduler
 
 

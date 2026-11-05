@@ -352,5 +352,5 @@ async def generate_accuracy_report(days: int = 90, check_day: int = 10) -> str:
     fname = f"ATBot_Accuracy_Report_{datetime.now(IST).strftime('%Y%m%d_%H%M')}.pdf"
     fpath = os.path.join(REPORTS_DIR, fname)
     pdf.output(fpath)
-    logger.info(f"📄 Report saved: {fpath}")
+    logger.info(f"Report saved: {fpath}")
     return fpath

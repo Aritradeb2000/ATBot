@@ -50,7 +50,7 @@ def set_sideways_win_rate(win_rate: Optional[float], n: int):
 
     if active:
         logger.warning(
-            f"🛑 [KillSwitch] SIDEWAYS ACTIVE — win_rate={win_rate:.1%} "
+            f"[KillSwitch] SIDEWAYS ACTIVE — win_rate={win_rate:.1%} "
             f"over {n} trades (threshold {SIDEWAYS_KILL_THRESHOLD:.0%})"
         )
     else:
@@ -71,7 +71,7 @@ def set_adaptive_weights(weights: Optional[dict]):
     if weights:
         g = weights.get("GLOBAL") or weights
         logger.info(
-            f"🧠 [Ensemble] Adaptive weights v2 loaded: "
+            f"[Ensemble] Adaptive weights v2 loaded: "
             f"GLOBAL T={g.get('T')} F={g.get('F')} S={g.get('S')}"
         )
 
@@ -179,13 +179,13 @@ def evaluate_signal_quality(tech_data: dict, is_buy: bool) -> dict:
 
         if win_prob >= 0.55:
             verdict = "HIGH_CONVICTION"
-            note = f"🔥 AI Conviction: {win_prob*100:.1f}% estimated win rate (2017-2024 calibrated)"
+            note = f"AI Conviction: {win_prob*100:.1f}% estimated win rate (2017-2024 calibrated)"
         elif win_prob >= 0.45:
             verdict = "NEUTRAL"
-            note = f"⚖️ AI Neutral: {win_prob*100:.1f}% win probability"
+            note = f"AI Neutral: {win_prob*100:.1f}% win probability"
         else:
             verdict = "LOW_PROBABILITY"
-            note = f"⚠️ AI Caution: Low historical win probability ({win_prob*100:.1f}%)"
+            note = f"AI Caution: Low historical win probability ({win_prob*100:.1f}%)"
 
         return {"win_prob": round(win_prob, 3), "verdict": verdict, "ai_note": note}
     except Exception as e:
@@ -240,7 +240,7 @@ def calculate_composite(
     t_score = float(t_raw) if t_has_data else 50.0
     f_score = float(f_val) if f_has_data else 50.0
     
-    # 📉 BEAR MARKET: Non-linear Fundamental Suppression
+    # BEAR MARKET: Non-linear Fundamental Suppression
     # Do not let high fundamentals overpower a weak technical downtrend.
     if regime == "BEAR" and t_score < 50:
         f_score = min(f_score, 50.0)

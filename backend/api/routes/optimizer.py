@@ -34,7 +34,7 @@ async def run_portfolio_optimizer(req: OptimizerRequest):
     Takes ~60–120s for Nifty 50 (parallel batches of 5).
     """
     logger.info(
-        f"🎯 Optimizer request: ₹{req.amount:,.0f} | "
+        f"Optimizer request: ₹{req.amount:,.0f} | "
         f"universe={req.universe} | profile={req.risk_profile} | max_stocks={req.max_stocks}"
     )
     try:

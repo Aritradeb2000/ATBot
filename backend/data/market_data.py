@@ -134,11 +134,11 @@ def fetch_ohlcv(
         # Drop rows with all-zero OHLCV (bad data)
         df = df[(df["Close"] > 0) & (df["Volume"] > 0)]
 
-        logger.info(f"✅ Fetched {len(df)} bars for {symbol} [{interval}]")
+        logger.info(f"Fetched {len(df)} bars for {symbol} [{interval}]")
         return df
 
     except Exception as e:
-        logger.error(f"❌ Failed to fetch OHLCV for {symbol}: {e}")
+        logger.error(f"Failed to fetch OHLCV for {symbol}: {e}")
         return None
 
 

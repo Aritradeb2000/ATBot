@@ -68,7 +68,7 @@ def analyze_fundamental(data: dict) -> dict:
             score += 5
         elif de_ratio > 2.0:
             score -= 15
-            flags.append("⚠️ High Debt Risk (D/E > 2.0)")
+            flags.append("High Debt Risk (D/E > 2.0)")
 
     # 5. ROE - Return on Equity (15%)
     roe = data.get("roe")

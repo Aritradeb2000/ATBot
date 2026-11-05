@@ -292,7 +292,7 @@ async def refresh_sideways_win_rate(days: int = 30) -> tuple[Optional[float], in
 
 
 async def run_outcome_check():
-    logger.info("📊 [OutcomeTracker] Starting daily outcome check...")
+    logger.info("[OutcomeTracker] Starting daily outcome check...")
     today = datetime.now(IST).date()
     checked = 0
 
@@ -478,5 +478,5 @@ async def run_outcome_check():
     except Exception as e:
         logger.error(f"[OutcomeTracker] Kill switch refresh failed: {e}")
 
-    logger.info(f"✅ [OutcomeTracker] Done — {checked} new outcome(s) recorded")
+    logger.info(f"[OutcomeTracker] Done — {checked} new outcome(s) recorded")
     return checked
