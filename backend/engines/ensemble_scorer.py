@@ -82,6 +82,7 @@ def determine_market_regime(
     nifty_change_20d: float = 0.0,
     advances_pct: float = 0.5,
     fii_net_5d: float = 0.0,
+    nifty_candlestick: Optional[str] = None,
 ) -> str:
     score = 0.0
     trend_score = 0.0
@@ -94,6 +95,14 @@ def determine_market_regime(
         trend_score = -2.0
     elif nifty_change_20d <= -2.5:
         trend_score = -1.0
+
+    # Index Candlestick Structural Confirmation
+    if nifty_candlestick in ("CDL_3WHITESOLDIERS", "CDL_MARUBOZU", "CDL_ENGULFING", "CDL_MORNINGSTAR"):
+        score += 0.5
+        trend_score += 0.5
+    elif nifty_candlestick in ("CDL_3BLACKCROWS", "CDL_SHOOTINGSTAR", "CDL_EVENINGSTAR"):
+        score -= 0.5
+        trend_score -= 0.5
 
     score += trend_score
 

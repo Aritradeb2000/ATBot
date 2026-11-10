@@ -8,7 +8,7 @@ v3 Enhancements:
 2. Mansfield Relative Strength (RS vs Nifty 50 over 20d and 50d).
 3. Institutional Delivery Conviction tiers & On-Balance Volume (OBV) trend divergence.
 4. Volatility Contraction Pattern (VCP / Squeeze Breakout using BB inside Keltner Channels).
-5. Vectorized native candlestick pattern recognition (0 external spam/warnings).
+5. Vectorized native candlestick pattern recognition (Reversals + Bullish Continuation: Three White Soldiers, Marubozu) with Volume-Spread Analysis (VSA) validation.
 """
 
 import warnings
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 def detect_candlesticks_native(df: pd.DataFrame) -> dict:
     """
-    Detects classic high-probability candlestick reversal patterns
+    Detects classic high-probability candlestick reversal and continuation patterns
     natively without TA-Lib or noisy external warning messages.
     """
     if df is None or len(df) < 3:
@@ -47,10 +47,16 @@ def detect_candlesticks_native(df: pd.DataFrame) -> dict:
     curr_lw   = min(curr_c, curr_o) - curr_l
 
     prev_body  = abs(prev_c - prev_o)
+    prev_rng   = max(0.001, prev_h - prev_l)
+    prev_uw    = prev_h - max(prev_c, prev_o)
+    prev_lw    = min(prev_c, prev_o) - prev_l
+
     prev2_body = abs(prev2_c - prev2_o)
+    prev2_rng  = max(0.001, prev2_h - prev2_l)
 
     patterns = {}
 
+    # ── 1. Reversal Patterns ──────────────────────────────────────────
     # Hammer (Bullish Reversal after downtrend)
     if curr_lw >= 1.8 * curr_body and curr_uw <= 0.3 * curr_body and curr_c > (curr_l + 0.6 * curr_rng):
         patterns["CDL_HAMMER"] = 100
@@ -81,6 +87,28 @@ def detect_candlesticks_native(df: pd.DataFrame) -> dict:
     # Evening Star (Bearish Reversal)
     if prev2_c > prev2_o and prev_body < (0.4 * prev2_body) and curr_c < curr_o and curr_c < ((prev2_o + prev2_c) / 2):
         patterns["CDL_EVENINGSTAR"] = -100
+
+    # ── 2. Bullish & Bearish Continuation Patterns (Impulse Momentum) ───
+    # Bullish Marubozu (Strong directional dominance across session)
+    if curr_c > curr_o and curr_body >= 0.80 * curr_rng:
+        patterns["CDL_MARUBOZU"] = 100
+    # Bearish Marubozu
+    elif curr_c < curr_o and curr_body >= 0.80 * curr_rng:
+        patterns["CDL_MARUBOZU"] = -100
+
+    # Three White Soldiers (3 consecutive strong bull sessions with higher closes)
+    if (curr_c > curr_o and prev_c > prev_o and prev2_c > prev2_o and
+        curr_c > prev_c > prev2_c and
+        curr_o >= prev_o and prev_o >= prev2_o and
+        curr_uw <= 0.25 * curr_body and prev_uw <= 0.25 * prev_body):
+        patterns["CDL_3WHITESOLDIERS"] = 100
+
+    # Three Black Crows (3 consecutive strong bear sessions with lower closes)
+    if (curr_c < curr_o and prev_c < prev_o and prev2_c < prev2_o and
+        curr_c < prev_c < prev2_c and
+        curr_o <= prev_o and prev_o <= prev2_o and
+        curr_lw <= 0.25 * curr_body and prev_lw <= 0.25 * prev_body):
+        patterns["CDL_3BLACKCROWS"] = -100
 
     return patterns
 
@@ -405,14 +433,55 @@ def analyze_technical(df: pd.DataFrame, delivery_pct: float = None, nifty_change
                 reversion_score -= 8
                 signals.append(f"Stretched above EMA21 (+{stretch_pct:.1f}%)")
 
+        # Volume-Spread Analysis (VSA) for candlestick validation
+        vol_20sma = latest.get("Volume_20SMA")
+        if pd.notna(vol_20sma) and vol_20sma > 0:
+            vol_ratio = float(latest["Volume"]) / float(vol_20sma)
+        else:
+            vol_ratio = 1.0
+
+        CONTINUATION_PATTERNS = {"CDL_MARUBOZU", "CDL_3WHITESOLDIERS", "CDL_3BLACKCROWS"}
+
         for pat_name, pat_val in cdl_patterns.items():
             clean_name = pat_name.replace("CDL_", "")
-            if pat_val > 0:
-                reversion_score += 6
-                signals.append(f"Bullish candlestick: {clean_name}")
-            elif pat_val < 0:
-                reversion_score -= 6
-                signals.append(f"Bearish candlestick: {clean_name}")
+
+            # Volume conviction weighting
+            if vol_ratio >= 1.5:
+                vol_label = f" (High Volume: {vol_ratio:.1f}x)"
+                vol_mult = 1.25
+            elif vol_ratio < 0.8:
+                vol_label = f" (Low Volume: {vol_ratio:.1f}x)"
+                vol_mult = 0.6
+            else:
+                vol_label = ""
+                vol_mult = 1.0
+
+            if pat_name in CONTINUATION_PATTERNS:
+                # Continuation patterns directly enhance/penalize TREND score
+                if pat_val > 0:
+                    base_pts = 10 if pat_name == "CDL_3WHITESOLDIERS" else 8
+                    pts = round(base_pts * vol_mult)
+                    trend_score += pts
+                    signals.append(f"Bullish continuation: {clean_name}{vol_label}")
+                elif pat_val < 0:
+                    base_pts = 10 if pat_name == "CDL_3BLACKCROWS" else 8
+                    pts = round(base_pts * vol_mult)
+                    trend_score -= pts
+                    signals.append(f"Bearish continuation: {clean_name}{vol_label}")
+            else:
+                # Reversal patterns affect reversion_score + small trend boost if aligned
+                if pat_val > 0:
+                    pts = round(8 * vol_mult)
+                    reversion_score += pts
+                    if latest.get("EMA_50") is not None and pd.notna(latest["EMA_50"]) and close_px > latest["EMA_50"]:
+                        trend_score += 4  # Trend-aligned reversal confirmation
+                    signals.append(f"Bullish reversal: {clean_name}{vol_label}")
+                elif pat_val < 0:
+                    pts = round(8 * vol_mult)
+                    reversion_score -= pts
+                    if latest.get("EMA_50") is not None and pd.notna(latest["EMA_50"]) and close_px < latest["EMA_50"]:
+                        trend_score -= 4  # Trend-aligned breakdown confirmation
+                    signals.append(f"Bearish reversal: {clean_name}{vol_label}")
 
         # ═══ ROUTING — ADX decides which sub-score is primary ═══════════════
         if adx_val is None:
