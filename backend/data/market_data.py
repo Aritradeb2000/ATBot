@@ -57,9 +57,19 @@ LOCAL_DATA_DIR = r"C:\Users\aritrad\Desktop\ATBot\nifty200_data"
 
 def get_local_ohlcv(symbol: str, period: str = "6mo") -> Optional[pd.DataFrame]:
     """
-    Lightning-fast local OHLCV loader for Nifty 200 constituents.
-    Loads historical daily bars directly from disk in <1ms without network calls.
+    Load local daily bars only when they cover the latest completed session.
+    Use the live provider during market hours instead of a static daily CSV.
     """
+    if is_market_open():
+        return None
+
+    now = datetime.now(IST)
+    expected_date = now.date()
+    if (now.hour, now.minute) < (settings.market_close_hour, settings.market_close_minute):
+        expected_date -= timedelta(days=1)
+    while expected_date.weekday() >= 5:
+        expected_date -= timedelta(days=1)
+
     if not os.path.exists(LOCAL_DATA_DIR):
         return None
 
@@ -77,20 +87,28 @@ def get_local_ohlcv(symbol: str, period: str = "6mo") -> Optional[pd.DataFrame]:
         df = df.set_index("Date").sort_index()
         df = df[["Open", "High", "Low", "Close", "Volume"]]
 
-        period_days = {
-            "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825, "max": 99999
-        }.get(period, 180)
-
-        cutoff = df.index.max() - pd.Timedelta(days=period_days)
-        df = df[df.index >= cutoff].copy()
-
         if df.index.tz is not None:
             df.index = df.index.tz_convert(IST)
         else:
             df.index = df.index.tz_localize(IST)
 
         df = df[(df["Close"] > 0) & (df["Volume"] > 0)]
-        return df
+        if df.empty:
+            return None
+
+        latest_date = df.index.max().date()
+        if latest_date != expected_date:
+            logger.warning(
+                "Ignoring local CSV for %s: latest bar is %s, expected %s",
+                symbol, latest_date, expected_date,
+            )
+            return None
+
+        period_days = {
+            "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825, "max": 99999
+        }.get(period, 180)
+        cutoff = pd.Timestamp(now).normalize() - pd.Timedelta(days=period_days)
+        return df[df.index >= cutoff].copy()
     except Exception as e:
         logger.warning(f"Failed to read local CSV for {symbol}: {e}")
         return None
@@ -102,8 +120,8 @@ def fetch_ohlcv(
     period: str = "6mo"
 ) -> Optional[pd.DataFrame]:
     """
-    Fetch OHLCV data for a symbol. Uses local Nifty 200 offline cache first
-    for instant <1ms loading, falling back to Yahoo Finance.
+    Fetch OHLCV data using fresh local daily bars or Yahoo Finance.
+    Stale local data is never returned when the live provider fails.
     """
     # 1. Fast offline local cache for daily candles
     if interval == "1d":
