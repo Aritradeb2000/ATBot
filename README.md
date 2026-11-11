@@ -70,10 +70,11 @@ Fixed the classic retail problem of risking 2.0x ATR to make 1.0x ATR:
 
 ---
 
-### ⚡ 4. Instant Offline Local Data Provider (<1ms)
-- `fetch_ohlcv` checks the local directory `nifty200_data/` before querying external APIs.
-- Instant historical data loading in **<1 millisecond** completely offline.
-- Bypasses Yahoo Finance rate limits, IP bans, and corporate Zscaler/proxy SSL handshake errors.
+### ⚡ 4. Freshness-Checked Local Data Provider
+- Outside market hours, `fetch_ohlcv` uses local daily CSVs only when their latest valid bar matches the most recently completed weekday session.
+- During market hours, daily requests bypass local CSVs and fetch from Yahoo Finance so static files are not treated as live prices.
+- Missing, stale, future-dated, or invalid local data falls back to Yahoo Finance. If that fetch fails, no stale local result is returned.
+- Weekends and pre-market requests can use the previous weekday's closing data. Exchange holidays are not modeled locally, so the provider is used conservatively when a weekday bar is missing.
 
 ---
 

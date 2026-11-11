@@ -4,7 +4,6 @@ Sets up SQLAlchemy async engine + session factory + table creation
 """
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.pool import StaticPool
 from backend.config import settings
 from backend.models.schemas import Base
 import logging
@@ -17,7 +16,6 @@ engine = create_async_engine(
     echo=settings.debug,
     # SQLite-specific: allow same connection across threads
     connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {},
-    poolclass=StaticPool if "sqlite" in settings.database_url else None,
 )
 
 # ── Session factory ───────────────────────────────────────────────────────
