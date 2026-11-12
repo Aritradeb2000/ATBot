@@ -12,7 +12,7 @@ v4 (PATCH):
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import Optional
 
 import yfinance as yf
@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from backend.models.database import AsyncSessionLocal
-from backend.models.schemas import AnalysisScore, SignalOutcome
+from backend.models.schemas import AnalysisScore, SignalOutcome, PaperPosition
 from backend.config import IST
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ def _pick_tracked_signal(score) -> tuple[str, int]:
 
 
 
-def _evaluate_trailing_stop(symbol: str, entry_date, check_day: int, entry_price: float, stop_loss: float, target_conservative: float, is_buy: bool):
+def _evaluate_trailing_stop(symbol: str, entry_date, check_day: int, entry_price: float, stop_loss: float, target_conservative: float, is_buy: bool, close_at_horizon: bool = True):
     import yfinance as yf
     from datetime import timedelta
     try:
@@ -135,6 +135,8 @@ def _evaluate_trailing_stop(symbol: str, entry_date, check_day: int, entry_price
         last_close = float(hist["Close"].iloc[-1])
         pnl_amt = (last_close - entry_price) if is_buy else (entry_price - last_close)
         pnl_pct = (pnl_amt / entry_price) * 100
+        if not close_at_horizon or len(hist) < check_day:
+            return "OPEN", pnl_pct, pnl_amt, last_date, last_close
         if abs(pnl_pct) <= 0.5:
             outcome_label = "BREAKEVEN"
         elif pnl_pct > 0:
@@ -291,12 +293,48 @@ async def refresh_sideways_win_rate(days: int = 30) -> tuple[Optional[float], in
     return wins / total, total
 
 
+async def _refresh_paper_positions(db: AsyncSession, today: date):
+    positions = (await db.execute(
+        select(PaperPosition).where(PaperPosition.status == "OPEN")
+    )).scalars().all()
+    for position in positions:
+        entry_day = position.entry_date.replace(tzinfo=timezone.utc).astimezone(IST).date()
+        elapsed = 0
+        session_day = entry_day
+        while session_day < today and elapsed < 10:
+            session_day += timedelta(days=1)
+            if session_day.weekday() < 5:
+                elapsed += 1
+        if not elapsed:
+            continue
+        result = await asyncio.to_thread(
+            _evaluate_trailing_stop,
+            position.symbol, entry_day, elapsed, position.entry_price,
+            position.stop_loss, position.target_conservative or 0.0, True,
+            close_at_horizon=elapsed >= 10,
+        )
+        outcome, pnl_pct, pnl_per_share, exit_date, exit_price = result
+        if outcome is None or outcome == "OPEN":
+            continue
+        exit_timestamp = pd_timestamp = exit_date
+        if hasattr(pd_timestamp, "to_pydatetime"):
+            exit_timestamp = pd_timestamp.to_pydatetime()
+        if exit_timestamp.tzinfo is None:
+            exit_timestamp = IST.localize(exit_timestamp)
+        position.status = "CLOSED"
+        position.exit_date = exit_timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+        position.exit_price = exit_price
+        position.outcome = outcome
+        position.pnl_amount = pnl_per_share * position.quantity
+
+
 async def run_outcome_check():
     logger.info("[OutcomeTracker] Starting daily outcome check...")
     today = datetime.now(IST).date()
     checked = 0
 
     async with AsyncSessionLocal() as db:
+        await _refresh_paper_positions(db, today)
         for check_day in CHECK_DAYS:
             target_entry_date = today
             td_count = 0
@@ -305,8 +343,8 @@ async def run_outcome_check():
                 if target_entry_date.weekday() < 5:
                     td_count += 1
 
-            window_start = datetime.combine(target_entry_date, datetime.min.time())
-            window_end   = window_start + timedelta(days=1)
+            window_start = IST.localize(datetime.combine(target_entry_date, datetime.min.time())).astimezone(timezone.utc).replace(tzinfo=None)
+            window_end = window_start + timedelta(days=1)
 
             result = await db.execute(
                 select(AnalysisScore).where(
@@ -324,17 +362,26 @@ async def run_outcome_check():
 
             logger.info(f"  D{check_day}: Found {len(scores)} signal(s) for {target_entry_date}")
 
-            # Deduplicate by symbol — keep most recent scan per symbol per day
+            positions = (await db.execute(
+                select(PaperPosition).where(PaperPosition.analysis_score_id.in_([score.id for score in scores]))
+            )).scalars().all()
+            positions_by_score = {position.analysis_score_id: position for position in positions}
+
             deduped: dict[str, object] = {}
             for s in scores:
                 sym = s.symbol
-                if sym not in deduped or s.timestamp > deduped[sym].timestamp:
+                priority = (s.id in positions_by_score, s.timestamp, s.id)
+                if sym not in deduped or priority > (
+                    deduped[sym].id in positions_by_score, deduped[sym].timestamp, deduped[sym].id
+                ):
                     deduped[sym] = s
             scores = list(deduped.values())
             logger.info(f"  D{check_day}: After dedup: {len(scores)} unique symbol(s)")
 
             for score in scores:
                 tracked_signal, is_shadow = _pick_tracked_signal(score)
+                position = positions_by_score.get(score.id)
+                is_deployed = position is not None and not is_shadow
 
                 # Skip if tracked signal is HOLD — nothing to score
                 if tracked_signal == "HOLD":
@@ -355,7 +402,7 @@ async def run_outcome_check():
                 if existing_row and existing_row.outcome != "OPEN":
                     continue
 
-                price = _fetch_close_price(score.symbol, today)
+                price = await asyncio.to_thread(_fetch_close_price, score.symbol, today)
                 if price is None:
                     if not existing_row:
                         db.add(SignalOutcome(
@@ -376,6 +423,7 @@ async def run_outcome_check():
                             outcome_detail    = "PRICE_UNAVAILABLE",
                             regime            = getattr(score, "regime", None) or "SIDEWAYS",
                             is_shadow         = is_shadow,
+                            is_deployed       = is_deployed,
                         ))
                     logger.warning(f"  Skipping {score.symbol} — could not fetch price")
                     continue
@@ -415,6 +463,26 @@ async def run_outcome_check():
                     regime              = getattr(score, "regime", None) or "SIDEWAYS",
                 )
 
+                t_outcome = t_pnl_pct = t_pnl_amt = t_date = t_price = None
+                if is_deployed:
+                    if position.status == "CLOSED":
+                        t_outcome = position.outcome
+                        t_price = position.exit_price
+                        t_pnl_amt = t_price - position.entry_price
+                        t_pnl_pct = t_pnl_amt / position.entry_price * 100
+                        t_date = position.exit_date
+                    else:
+                        entry_day = position.entry_date.replace(tzinfo=timezone.utc).astimezone(IST).date()
+                        t_outcome, t_pnl_pct, t_pnl_amt, t_date, t_price = await asyncio.to_thread(
+                            _evaluate_trailing_stop,
+                            position.symbol, entry_day, check_day, position.entry_price,
+                            position.stop_loss, position.target_conservative or 0.0, True,
+                        )
+                        if t_date is not None:
+                            if t_date.tzinfo is None:
+                                t_date = IST.localize(t_date)
+                            t_date = t_date.astimezone(timezone.utc).replace(tzinfo=None)
+
                 if existing_row:
                     existing_row.price_at_check      = price
                     existing_row.pnl_amount          = pnl_amount
@@ -425,15 +493,14 @@ async def run_outcome_check():
                     existing_row.target_base         = t_base
                     existing_row.target_aggressive   = t_aggressive
                     existing_row.check_date          = datetime.now(IST)
+                    existing_row.is_deployed         = is_deployed
+                    existing_row.trailing_outcome    = t_outcome
+                    existing_row.trailing_pnl_percent = t_pnl_pct
+                    existing_row.trailing_pnl_amount = t_pnl_amt
+                    existing_row.trailing_exit_date  = t_date
+                    existing_row.trailing_exit_price = t_price
                     logger.info(f"  Resolved stuck OPEN: {score.symbol} D{check_day} shadow={is_shadow} → {outcome}")
                 else:
-                    is_deployed = True if getattr(score, "position_sizing", 0.0) and getattr(score, "position_sizing", 0.0) > 0 else False
-                    t_outcome = t_pnl_pct = t_pnl_amt = t_date = t_price = None
-                    if is_deployed:
-                        t_outcome, t_pnl_pct, t_pnl_amt, t_date, t_price = _evaluate_trailing_stop(
-                            score.symbol, score.timestamp.date(), check_day, entry_price, score.stop_loss or 0.0, t_conservative, tracked_signal in ("BUY", "STRONG BUY")
-                        )
-                    
                     db.add(SignalOutcome(
                         analysis_score_id   = score.id,
                         symbol              = score.symbol,

@@ -4,11 +4,12 @@ Routes for getting technical, fundamental, sentiment and composite scores
 """
 
 from fastapi import APIRouter, HTTPException, Depends
+from starlette.concurrency import run_in_threadpool
 from typing import Optional
 import logging
 
 import json
-from backend.data.market_data import fetch_ohlcv, get_current_price
+from backend.data.market_data import fetch_ohlcv
 from backend.data.fundamentals import fetch_fundamentals_yfinance
 from backend.data.news_feed import fetch_finnhub_news
 from backend.data.nse_live import get_fii_dii_data
@@ -26,14 +27,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Analysis"])
 
-@router.get("/analyze/{symbol}")
-async def get_full_analysis(symbol: str, capital: Optional[float] = None, db: AsyncSession = Depends(get_db)):
-    """
-    Perform a complete, real-time analysis of a stock across all 3 engines.
-    Optionally accepts a 'capital' parameter to calculate suggested position sizing.
-    """
-    symbol = symbol.upper()
-    
+def _compute_analysis(symbol: str, capital: Optional[float]):
     # 1. Fetch Data
     # Get 6 months of daily OHLCV
     ohlcv_df = fetch_ohlcv(symbol, interval="1d", period="6mo")
@@ -71,6 +65,16 @@ async def get_full_analysis(symbol: str, capital: Optional[float] = None, db: As
         vix=vix,
         user_capital=capital
     )
+    return tech_result, fund_result, sent_result, final_result, fundamentals
+
+
+@router.get("/analyze/{symbol}")
+async def get_full_analysis(symbol: str, capital: Optional[float] = None, db: AsyncSession = Depends(get_db)):
+    """Analyze a stock off the event loop, then persist using the async session."""
+    symbol = symbol.upper()
+    tech_result, fund_result, sent_result, final_result, fundamentals = await run_in_threadpool(
+        _compute_analysis, symbol, capital
+    )
 
     # 4. Save to Database
     try:
@@ -106,6 +110,7 @@ async def get_full_analysis(symbol: str, capital: Optional[float] = None, db: As
         db.add(score_record)
         await db.commit()
     except Exception as e:
+        await db.rollback()
         logger.error(f"Failed to save AnalysisScore for {symbol}: {e}")
 
     return {

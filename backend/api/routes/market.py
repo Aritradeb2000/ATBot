@@ -3,7 +3,7 @@ ATBot — Market & Screener Endpoints
 Routes for market breadth, index status, and screener functionality
 """
 
-from fastapi import APIRouter, Query, BackgroundTasks
+from fastapi import APIRouter, Query
 import logging
 import asyncio
 import yfinance as yf
@@ -26,7 +26,7 @@ async def trigger_fii_refresh():
 
 
 @router.get("/ohlcv/{symbol}")
-async def get_ohlcv(
+def get_ohlcv(
     symbol: str,
     period: str = Query(None, description="yfinance period: max, 730d, 60d, 7d"),
     interval: str = Query("1d", description="yfinance interval: 1m, 5m, 15m, 30m, 1h, 1d, 1wk"),
@@ -75,24 +75,6 @@ async def get_ohlcv(
         logger.error(f"OHLCV fetch failed for {symbol}: {e}")
         return []
 
-        bars = []
-        for idx, row in df.iterrows():
-            time_str = idx.strftime("%Y-%m-%d")
-            bars.append({
-                "time": time_str,
-                "open":  round(float(row["Open"]),  2),
-                "high":  round(float(row["High"]),  2),
-                "low":   round(float(row["Low"]),   2),
-                "close": round(float(row["Close"]), 2),
-                "volume": int(row["Volume"]) if "Volume" in row else 0,
-            })
-
-        return bars
-    except Exception as e:
-        logger.error(f"OHLCV fetch failed for {symbol}: {e}")
-        return []
-
-
 @router.get("/market/overview")
 async def get_market_overview():
     """
@@ -132,7 +114,7 @@ async def trigger_morning_briefing():
 # ── NEW: Market Intelligence Endpoints ───────────────────────────────────────
 
 @router.get("/market/fii-history")
-async def get_fii_dii_history_endpoint(days: int = Query(default=30, ge=5, le=90)):
+def get_fii_dii_history_endpoint(days: int = Query(default=30, ge=5, le=90)):
     """
     Returns FII/DII net flow for the last N trading days.
     Each entry: { date, fii_net, dii_net }
@@ -147,7 +129,7 @@ async def get_fii_dii_history_endpoint(days: int = Query(default=30, ge=5, le=90
 
 
 @router.get("/market/vix-history")
-async def get_vix_history(days: int = Query(default=30, ge=5, le=90)):
+def get_vix_history(days: int = Query(default=30, ge=5, le=90)):
     """
     Returns India VIX closing values for the last N trading days.
     Each entry: { date: 'YYYY-MM-DD', vix: float }
@@ -184,7 +166,7 @@ SECTOR_INDICES = {
 
 
 @router.get("/market/sector-heatmap")
-async def get_sector_heatmap():
+def get_sector_heatmap():
     """
     Returns today's % change for 8 Nifty sector indices.
     Each entry: { sector, change_pct, price }
