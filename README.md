@@ -259,13 +259,115 @@ From the project directory:
 
 The regression suite uses temporary databases/files and mocked providers. Coverage includes SQLite transaction isolation, local-price freshness, direct async allocation, paper-position persistence and caps, outcome linkage, HTTP event-loop responsiveness, and scheduled refresh offloading. It does not certify external API availability, model accuracy, production deployment, or frontend behavior.
 
-To run the standalone historical backtester after configuring its dataset path:
+### Historical Backtester
+
+[backend/engines/backtester.py](backend/engines/backtester.py) runs an offline, technical-only simulation across local daily OHLCV CSVs. It does not call Yahoo Finance, the live analysis API, or the database. Its scoring rules are separate from the live technical engine and ensemble.
+
+#### Inputs and Parameters
+
+Set the module's `DATA_DIR` to the directory containing the CSVs described under [Local Daily CSVs](#local-daily-csvs). Each filename becomes the trade's symbol: `RELIANCE.csv` produces `RELIANCE`, without automatically adding `.NS`. The runner reads every `.csv` file in that directory, parses and sorts `Date`, and skips files with fewer than 250 rows. Per-file processing failures are logged and skipped; a missing dataset directory fails before that per-file error handling.
+
+The entry point is `run_full_backtest(sample_size=None, start_year=2017, holding_days=10)`:
+
+| Parameter | Default | Meaning |
+| --- | --- | --- |
+| `sample_size` | `None` | Process all CSV files. A positive integer selects the first N files in filesystem listing order, not a random or sorted sample. |
+| `start_year` | `2017` | Retain trades whose entry date is on or after January 1 of this year. Earlier rows still contribute indicator warm-up; the dataset is not truncated before indicator calculation. |
+| `holding_days` | `10` | Maximum number of subsequent dataset bars inspected per entry, not calendar days. Supply a positive integer. |
+
+The lower-level `simulate_trades()` additionally accepts `target_atr_mult=2.0` and `stop_atr_mult=1.2`. The full runner does not expose those multipliers; use the lower-level pipeline to customize them.
+
+#### Indicator and Signal Pipeline
+
+The runner calls three functions in sequence for each eligible file:
+
+1. `compute_indicators(df)` calculates EMA 9/21/50/200, RSI 14, MACD 12/26/9, ATR 14, Bollinger Bands 20/2, Supertrend 10/3, ADX 14, and a 20-bar volume SMA. Some calculated indicators are returned as context rather than used directly in signal scoring.
+2. `generate_signals(df)` starts each bar at 50 points, applies the rules below, clips the result to 0-100, and adds `technical_score` and `signal` columns.
+3. `simulate_trades(df, symbol, ...)` evaluates eligible signals after the warm-up and returns a list of independent trade records. The runner then applies the `start_year` filter and combines the records into one DataFrame.
+
+| Scoring condition | Adjustment |
+| --- | --- |
+| MACD above its signal with positive histogram | +15; the corresponding bearish condition gives -15; otherwise 0 |
+| Close above EMA 200 | +5; otherwise -5 |
+| EMA 21 above EMA 50 | +10; otherwise -10 |
+| Supertrend direction equals 1 | +10; otherwise -10 |
+| RSI between 55 and 70, inclusive | +10; RSI above 70 gives -5; otherwise 0 |
+| Volume strictly above twice its 20-bar SMA | +10 for a close above the open, -10 for a close below the open; otherwise 0 |
+
+| Technical score | Signal |
+| --- | --- |
+| 75-100 | `STRONG BUY` |
+| 65 to below 75 | `BUY` |
+| Above 40 to below 65 | `HOLD` |
+| Above 30 to 40 | `SELL` |
+| 0-30 | `STRONG SELL` |
+
+These are the backtester's thresholds, not the live ensemble's regime-adjusted thresholds.
+
+#### Trade Simulation Rules
+
+- Entries start at zero-based row 200, leaving the first 200 bars for warm-up. The final `holding_days` rows cannot start trades because their complete forward window is unavailable.
+- Every BUY/STRONG BUY is a simulated long, and every SELL/STRONG SELL is a simulated short. HOLD bars are ignored. Entries with missing/nonpositive ATR or nonpositive price are skipped.
+- Entry price is the signal bar's close. With default parameters, a long targets entry plus 2.0 times entry ATR and stops at entry minus 1.2 times ATR; a short reverses those directions. Levels remain fixed throughout that trade.
+- Checks begin on the next bar, not the entry bar. For each future bar, stop loss is checked before target. If both are touched in the same bar, the outcome is `LOSS`.
+- A target touch gives `WIN`; a stop touch gives `LOSS`. Exits are recorded at the exact target/stop level, without gap-open or slippage adjustment.
+- If neither level is touched, the trade exits at the closing price of the final holding bar with outcome `EXPIRED`. That label is not a P&L classification: an expired trade may make money, lose money, or break even.
+- Percentage P&L is direction-adjusted: a price decline profits a short. `exit_day` is the number of bars after entry, starting at 1.
+- Signals are evaluated independently. Multiple trades in the same symbol can overlap; there is no one-position-at-a-time rule, cash balance, position sizing, or portfolio exposure constraint.
+
+#### Running and Customizing
+
+Run the full dataset from the project directory after configuring `DATA_DIR`:
 
 ```powershell
 .\venv\Scripts\python.exe -c "from backend.engines.backtester import run_full_backtest; trades = run_full_backtest(start_year=2017, holding_days=10); print(trades.tail())"
 ```
 
-This backtester uses a separate technical-only signal generator, a default ten-bar horizon, ATR targets/stops, and stop-first checks when both levels are touched. It returns a trade DataFrame; it does not reproduce the full live ensemble, sentiment, adaptive learner, or optional XGBoost filter. It does not model brokerage, taxes, slippage, or portfolio-wide capital constraints.
+For a small run, override the path in memory without editing application code:
+
+```powershell
+.\venv\Scripts\python.exe -c "from backend.engines import backtester; backtester.DATA_DIR = '../nifty200_data'; trades = backtester.run_full_backtest(sample_size=5, start_year=2020, holding_days=5); print(trades.tail())"
+```
+
+For custom ATR multipliers, use this Python pipeline with your own CSV path:
+
+```python
+import pandas as pd
+from backend.engines import backtester
+
+bars = pd.read_csv("../nifty200_data/RELIANCE.csv")
+bars["Date"] = pd.to_datetime(bars["Date"])
+bars = bars.sort_values("Date").reset_index(drop=True)
+bars = backtester.compute_indicators(bars)
+bars = backtester.generate_signals(bars)
+trades = pd.DataFrame(backtester.simulate_trades(
+    bars,
+    symbol="RELIANCE",
+    holding_days=10,
+    target_atr_mult=2.5,
+    stop_atr_mult=1.0,
+))
+print(trades.tail())
+```
+
+Calling `python -m backend.engines.backtester` alone does not run a backtest: the module defines functions but has no command-line entry point.
+
+#### Returned Data
+
+`run_full_backtest()` prints progress and elapsed time, then returns one row per simulated trade. It does not automatically write CSVs, produce PDF reports, calculate aggregate performance metrics, or train a model. If there are no trades, it returns an empty DataFrame that may have no columns.
+
+| Output columns | Contents |
+| --- | --- |
+| `symbol`, `signal`, `direction` | Source filename symbol, entry signal, and `LONG`/`SHORT` direction |
+| `entry_date`, `exit_date`, `exit_day` | Signal date, exit date, and holding bars to exit |
+| `entry_price`, `exit_price`, `target_price`, `stop_price` | Entry and modeled execution levels |
+| `outcome`, `pnl_pct` | `WIN`, `LOSS`, or `EXPIRED`, plus direction-adjusted percentage return |
+| `technical_score`, `rsi_14`, `adx_14`, `macd_hist` | Signal-bar analysis values |
+| `atr_pct`, `above_200ema`, `supertrend_dir`, `vol_ratio` | Entry ATR as a percentage of price, EMA alignment flag, trend direction, and volume relative to its SMA |
+
+Returns are per-trade percentages, not capital-weighted portfolio returns. The implementation omits brokerage, taxes, slippage, borrowing/short-sale constraints, survivorship-bias controls, and corporate-action verification. It also omits live fundamentals, sentiment, adaptive weights, the optional XGBoost filter, and paper-position breakeven/trailing logic. Do not treat these results as a reproduction of live strategy performance.
+
+### Frontend Build
 
 Frontend build check:
 
