@@ -13,6 +13,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime
 import logging
+from starlette.concurrency import run_in_threadpool
 
 from backend.config import settings, IST, NIFTY50_SYMBOLS
 from backend.data.market_data import (
@@ -79,11 +80,11 @@ async def job_refresh_market_data():
     logger.info("[Scheduler] Refreshing market data...")
     try:
         # Refresh Nifty 50 OHLCV
-        data = fetch_multiple_ohlcv(NIFTY50_SYMBOLS[:10], interval="5m", period="1d")
+        data = await run_in_threadpool(fetch_multiple_ohlcv, NIFTY50_SYMBOLS[:10], interval="5m", period="1d")
         _cache["ohlcv"].update(data)
 
         # Refresh index levels
-        indices = fetch_index_data()
+        indices = await run_in_threadpool(fetch_index_data)
         _cache["indices"] = indices
 
         _cache["last_updated"]["market_data"] = datetime.now(IST).isoformat()
@@ -96,9 +97,9 @@ async def job_refresh_market_data():
 async def job_refresh_index_data():
     """Refresh Nifty, Sensex, VIX levels. Runs every 5 min."""
     try:
-        _cache["indices"] = fetch_index_data()
-        _cache["india_vix"] = get_india_vix()
-        _cache["market_breadth"] = get_market_breadth()
+        _cache["indices"] = await run_in_threadpool(fetch_index_data)
+        _cache["india_vix"] = await run_in_threadpool(get_india_vix)
+        _cache["market_breadth"] = await run_in_threadpool(get_market_breadth)
         _cache["last_updated"]["indices"] = datetime.now(IST).isoformat()
     except Exception as e:
         logger.error(f"Index refresh failed: {e}")
@@ -113,7 +114,7 @@ async def job_refresh_news():
     """
     logger.info("[Scheduler] Refreshing news feeds...")
     try:
-        articles = fetch_all_rss_feeds()
+        articles = await run_in_threadpool(fetch_all_rss_feeds)
         articles = match_articles_to_symbols(articles)
         # Prepend new articles, keep last 500
         existing_ids = {a["id"] for a in _cache["news"]}
@@ -140,7 +141,7 @@ async def job_refresh_fundamentals():
     count = 0
     for symbol in NIFTY50_SYMBOLS:
         try:
-            data = fetch_fundamentals(symbol)
+            data = await run_in_threadpool(fetch_fundamentals, symbol)
             if data:
                 _cache["fundamentals"][symbol] = data
                 count += 1
@@ -159,7 +160,7 @@ async def job_refresh_fii_dii():
     """
     logger.info("[Scheduler] Refreshing FII/DII data...")
     try:
-        data = get_fii_dii_data()
+        data = await run_in_threadpool(get_fii_dii_data)
         if data:
             _cache["fii_dii"] = data
             logger.info(f"FII net: ₹{data.get('fii_net')} Cr | DII net: ₹{data.get('dii_net')} Cr")
@@ -214,7 +215,7 @@ async def job_refresh_earnings():
     """
     logger.info("[Scheduler] Checking upcoming earnings...")
     try:
-        earnings = get_upcoming_earnings(NIFTY50_SYMBOLS)
+        earnings = await run_in_threadpool(get_upcoming_earnings, NIFTY50_SYMBOLS)
         _cache["upcoming_earnings"] = earnings
         if earnings:
             logger.info(f"{len(earnings)} earnings events this week")
@@ -232,8 +233,8 @@ async def job_morning_briefing():
     """
     logger.info("[Scheduler] Generating morning briefing...")
     try:
-        global_cues = fetch_global_cues()
-        vix_data = get_india_vix()
+        global_cues = await run_in_threadpool(fetch_global_cues)
+        vix_data = await run_in_threadpool(get_india_vix)
         fii_dii = _cache.get("fii_dii")
         earnings = _cache.get("upcoming_earnings", [])
         indices = _cache.get("indices", {})
@@ -450,8 +451,7 @@ async def job_daily_screener():
         try:
             from backend.engines.portfolio_manager import run_portfolio_allocation_for_today
             logger.info("  Auto-screener: Running portfolio allocation rules...")
-            # Run synchronously since it uses SessionLocal (not async)
-            await asyncio.get_event_loop().run_in_executor(None, run_portfolio_allocation_for_today)
+            await run_portfolio_allocation_for_today()
         except Exception as e:
             logger.error(f"Portfolio allocation failed: {e}")
 

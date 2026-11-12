@@ -143,6 +143,27 @@ class AnalysisScore(Base):
     )
 
 
+class PaperPosition(Base):
+    __tablename__ = "paper_positions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    analysis_score_id = Column(Integer, ForeignKey("analysis_scores.id"), nullable=False, unique=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    sector = Column(String(50), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    entry_date = Column(DateTime, nullable=False)
+    entry_price = Column(Float, nullable=False)
+    stop_loss = Column(Float, nullable=False)
+    target_conservative = Column(Float)
+    regime = Column(String(10), nullable=False)
+    status = Column(String(10), nullable=False, default="OPEN", index=True)
+    exit_date = Column(DateTime)
+    exit_price = Column(Float)
+    outcome = Column(String(20))
+    pnl_amount = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 # ── News Articles ─────────────────────────────────────────────────────────
 class NewsArticle(Base):
     __tablename__ = "news_articles"
