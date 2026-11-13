@@ -20,7 +20,7 @@ from sqlalchemy import select, func
 from backend.config import NIFTY50_SYMBOLS
 from backend.data.nse_universe import get_universe
 from backend.data.market_data import fetch_ohlcv
-from backend.data.fundamentals import fetch_fundamentals_yfinance
+from backend.data.fundamentals import fetch_fundamentals_yfinance, upsert_fundamentals
 from backend.data.news_feed import fetch_finnhub_news
 from backend.data.nse_live import get_fii_dii_data
 from backend.data.scheduler import get_cache
@@ -81,31 +81,10 @@ async def _analyze_one(symbol: str, cache: dict) -> Optional[dict]:
 
         # Persist to DB
         try:
-            import json
-            targets = final.get("targets") or {}
-            score_record = AnalysisScore(
-                symbol=symbol,
-                technical_score=final.get("components", {}).get("technical"),
-                fundamental_score=final.get("components", {}).get("fundamental"),
-                sentiment_score=final.get("components", {}).get("sentiment"),
-                composite_score=final.get("composite_score"),
-                signal=final.get("signal"),
-                confidence=final.get("confidence", 0.8),
-                current_price=tech_result.get("close"),
-                target_low_5d=targets.get("conservative"),
-                target_base_5d=targets.get("base"),
-                target_high_5d=targets.get("aggressive"),
-                target_low_10d=targets.get("conservative"),
-                target_base_10d=targets.get("base"),
-                target_high_10d=targets.get("aggressive"),
-                stop_loss=final.get("stop_loss"),
-                active_signals=json.dumps(tech_result.get("signals", [])),
-                dominant_pattern=tech_result.get("trend"),
-                atr_14=tech_result.get("atr"),
-                regime=final.get("regime"),
-            )
+            score_record = AnalysisScore.from_results(symbol, final, tech_result)
             async with AsyncSessionLocal() as db:
                 db.add(score_record)
+                await upsert_fundamentals(db, symbol, fundamentals)
                 await db.commit()
         except Exception as e:
             logger.warning(f"Screener: failed to save DB record for {symbol} — {e}")

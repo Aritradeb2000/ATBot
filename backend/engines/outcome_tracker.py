@@ -97,11 +97,6 @@ def _evaluate_trailing_stop(symbol: str, entry_date, check_day: int, entry_price
             close = row["Close"]
             
             if is_buy:
-                # Move stop to breakeven once conservative target 1 is touched
-                if target_conservative and high >= target_conservative:
-                    current_stop = max(current_stop, entry_price)
-                    hit_breakeven_guard = True
-
                 if low <= current_stop:
                     exit_price = min(row["Open"], current_stop)
                     pnl_amt = exit_price - entry_price
@@ -113,12 +108,10 @@ def _evaluate_trailing_stop(symbol: str, entry_date, check_day: int, entry_price
                     else:
                         outcome_label = "LOSS"
                     return outcome_label, pnl_pct, pnl_amt, idx, exit_price
-            else:
-                # Move short stop to breakeven once conservative target 1 is touched
-                if target_conservative and low <= target_conservative:
-                    current_stop = min(current_stop, entry_price)
+                if target_conservative and high >= target_conservative:
+                    current_stop = max(current_stop, entry_price)
                     hit_breakeven_guard = True
-
+            else:
                 if high >= current_stop:
                     exit_price = max(row["Open"], current_stop)
                     pnl_amt = entry_price - exit_price
@@ -130,6 +123,9 @@ def _evaluate_trailing_stop(symbol: str, entry_date, check_day: int, entry_price
                     else:
                         outcome_label = "LOSS"
                     return outcome_label, pnl_pct, pnl_amt, idx, exit_price
+                if target_conservative and low <= target_conservative:
+                    current_stop = min(current_stop, entry_price)
+                    hit_breakeven_guard = True
                     
         last_date = hist.index[-1]
         last_close = float(hist["Close"].iloc[-1])
@@ -155,8 +151,9 @@ def _fetch_close_price(symbol: str, target_date):
     try:
         ticker = yf.Ticker(symbol)
         start = target_date
-        end   = target_date + timedelta(days=10)
+        end   = target_date + timedelta(days=1)
         hist  = ticker.history(start=start.isoformat(), end=end.isoformat(), interval="1d")
+        hist = hist[hist.index.date == target_date]
         if hist.empty:
             return None
         return round(float(hist["Close"].iloc[0]), 2)
@@ -254,7 +251,7 @@ async def refresh_sideways_win_rate(days: int = 30) -> tuple[Optional[float], in
     Uses only NON-shadow outcomes so the kill switch is driven by real
     (visible) signal history, not the counterfactual shadow stream.
     """
-    cutoff = datetime.now(IST).replace(tzinfo=None) - timedelta(days=days)
+    cutoff = datetime.utcnow() - timedelta(days=days)
     async with AsyncSessionLocal() as db:
         res = await db.execute(
             select(SignalOutcome).where(
@@ -275,7 +272,7 @@ async def refresh_sideways_win_rate(days: int = 30) -> tuple[Optional[float], in
     total = 0
     for r in rows:
         sig = (r.signal or "").upper().strip()
-        pnl = r.pnl_percent
+        pnl = r.trade_return_percent
         if pnl is None:
             continue
         is_buy  = sig in ("BUY", "STRONG BUY", "STRONG_BUY")
@@ -285,8 +282,8 @@ async def refresh_sideways_win_rate(days: int = 30) -> tuple[Optional[float], in
         if abs(pnl) < 0.5:
             continue
         total += 1
-        if is_buy  and pnl > 0: wins += 1
-        if is_sell and pnl < 0: wins += 1
+        if pnl > 0:
+            wins += 1
 
     if total == 0:
         return None, 0
@@ -343,15 +340,11 @@ async def run_outcome_check():
                 if target_entry_date.weekday() < 5:
                     td_count += 1
 
-            window_start = IST.localize(datetime.combine(target_entry_date, datetime.min.time())).astimezone(timezone.utc).replace(tzinfo=None)
-            window_end = window_start + timedelta(days=1)
+            window_end = IST.localize(datetime.combine(target_entry_date + timedelta(days=1), datetime.min.time())).astimezone(timezone.utc).replace(tzinfo=None)
 
             result = await db.execute(
                 select(AnalysisScore).where(
-                    and_(
-                        AnalysisScore.timestamp >= window_start,
-                        AnalysisScore.timestamp <  window_end,
-                    )
+                    AnalysisScore.timestamp < window_end
                 )
             )
             scores = result.scalars().all()
@@ -360,25 +353,50 @@ async def run_outcome_check():
                 logger.info(f"  D{check_day}: No signals found for {target_entry_date}")
                 continue
 
-            logger.info(f"  D{check_day}: Found {len(scores)} signal(s) for {target_entry_date}")
+            logger.info(f"  D{check_day}: Found {len(scores)} candidate signal(s) due on or before {today}")
 
             positions = (await db.execute(
                 select(PaperPosition).where(PaperPosition.analysis_score_id.in_([score.id for score in scores]))
             )).scalars().all()
             positions_by_score = {position.analysis_score_id: position for position in positions}
 
-            deduped: dict[str, object] = {}
+            deduped: dict[tuple[str, date], AnalysisScore] = {}
             for s in scores:
-                sym = s.symbol
+                entry_day = s.timestamp.replace(tzinfo=timezone.utc).astimezone(IST).date()
+                key = (s.symbol, entry_day)
                 priority = (s.id in positions_by_score, s.timestamp, s.id)
-                if sym not in deduped or priority > (
-                    deduped[sym].id in positions_by_score, deduped[sym].timestamp, deduped[sym].id
+                if key not in deduped or priority > (
+                    deduped[key].id in positions_by_score, deduped[key].timestamp, deduped[key].id
                 ):
-                    deduped[sym] = s
+                    deduped[key] = s
             scores = list(deduped.values())
+            pending_ids = set((await db.execute(
+                select(SignalOutcome.analysis_score_id).where(
+                    SignalOutcome.check_day == check_day,
+                    SignalOutcome.outcome == "OPEN",
+                )
+            )).scalars())
+            selected_ids = {score.id for score in scores}
+            if pending_ids - selected_ids:
+                pending_scores = (await db.execute(
+                    select(AnalysisScore).where(
+                        AnalysisScore.id.in_(pending_ids - selected_ids),
+                        AnalysisScore.timestamp < window_end,
+                    )
+                )).scalars().all()
+                scores.extend(pending_scores)
             logger.info(f"  D{check_day}: After dedup: {len(scores)} unique symbol(s)")
 
             for score in scores:
+                entry_day = score.timestamp.replace(tzinfo=timezone.utc).astimezone(IST).date()
+                due_date = entry_day
+                elapsed = 0
+                while elapsed < check_day:
+                    due_date += timedelta(days=1)
+                    if due_date.weekday() < 5:
+                        elapsed += 1
+                if due_date > today:
+                    continue
                 tracked_signal, is_shadow = _pick_tracked_signal(score)
                 position = positions_by_score.get(score.id)
                 is_deployed = position is not None and not is_shadow
@@ -393,8 +411,6 @@ async def run_outcome_check():
                         and_(
                             SignalOutcome.analysis_score_id == score.id,
                             SignalOutcome.check_day == check_day,
-                            (SignalOutcome.is_shadow == is_shadow) |
-                            (SignalOutcome.is_shadow.is_(None) if is_shadow == 0 else False),
                         )
                     )
                 )
@@ -402,7 +418,7 @@ async def run_outcome_check():
                 if existing_row and existing_row.outcome != "OPEN":
                     continue
 
-                price = await asyncio.to_thread(_fetch_close_price, score.symbol, today)
+                price = await asyncio.to_thread(_fetch_close_price, score.symbol, due_date)
                 if price is None:
                     if not existing_row:
                         db.add(SignalOutcome(
@@ -429,8 +445,9 @@ async def run_outcome_check():
                     continue
 
                 entry_price = score.current_price or 0.0
-                pnl_amount  = round(price - entry_price, 2) if entry_price else None
-                pnl_percent = round(((price - entry_price) / entry_price) * 100, 2) if entry_price else None
+                direction = -1 if tracked_signal in ("SELL", "STRONG SELL", "STRONG_SELL") else 1
+                pnl_amount = round((price - entry_price) * direction, 2) if entry_price else None
+                pnl_percent = round(((price - entry_price) / entry_price) * 100 * direction, 2) if entry_price else None
 
                 if check_day <= 5:
                     t_conservative = score.target_low_5d  or score.target_base_5d or 0.0
@@ -465,7 +482,8 @@ async def run_outcome_check():
 
                 t_outcome = t_pnl_pct = t_pnl_amt = t_date = t_price = None
                 if is_deployed:
-                    if position.status == "CLOSED":
+                    exit_day = position.exit_date.replace(tzinfo=timezone.utc).astimezone(IST).date() if position.exit_date else None
+                    if position.status == "CLOSED" and exit_day is not None and exit_day <= due_date:
                         t_outcome = position.outcome
                         t_price = position.exit_price
                         t_pnl_amt = t_price - position.entry_price

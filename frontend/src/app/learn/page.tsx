@@ -3,8 +3,8 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import useSWR from "swr";
 import {
-  getLearnStats, getRecentOutcomes, triggerOutcomeCheck,
-  type LearnStats, type OutcomeRecord,
+  getLearnStats, getRecentOutcomes, triggerOutcomeCheck, getAccuracyReport,
+  type LearnStats, type OutcomeRecord, type OutcomeScope,
 } from "@/lib/api";
 
 // ── Meta-Learner v3 Types ─────────────────────────────────────────────────────
@@ -282,17 +282,18 @@ function NoDataState({ onTrigger, triggering }: { onTrigger: () => void; trigger
 export default function LearnPage() {
   const [checkDay, setCheckDay]  = useState<1 | 2 | 5 | 10 | 50 | 100>(10); // default D10 — most data
   const [lookback, setLookback]  = useState(90);
+  const [scope, setScope] = useState<OutcomeScope>("visible");
   const [triggering, setTriggering] = useState(false);
   const [triggerMsg, setTriggerMsg] = useState("");
 
   const { data: stats, isLoading: statsLoading, mutate: mutateStats } = useSWR<LearnStats>(
-    `learn-stats-${checkDay}-${lookback}`,
-    () => getLearnStats(lookback, checkDay),
+    `learn-stats-${checkDay}-${lookback}-${scope}`,
+    () => getLearnStats(lookback, checkDay, scope),
     { revalidateOnFocus: false }
   );
   const { data: recent = [], isLoading: recentLoading } = useSWR<OutcomeRecord[]>(
-    `learn-recent-${checkDay}`,
-    () => getRecentOutcomes(50, checkDay),  // Bug4: pass checkDay filter
+    `learn-recent-${checkDay}-${scope}`,
+    () => getRecentOutcomes(50, checkDay, scope),
     { revalidateOnFocus: false }
   );
 
@@ -316,14 +317,12 @@ export default function LearnPage() {
     setDownloading(true);
     try {
       // Pass the same check_day filter the user is viewing so PDF matches dashboard
-      const response = await fetch(`http://localhost:8000/api/learn/report?days=${lookback}&check_day=${checkDay}`);
-      if (!response.ok) throw new Error("Report generation failed");
-      const blob = await response.blob();
+      const blob = await getAccuracyReport(lookback, checkDay, scope);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       const date = new Date().toISOString().slice(0, 10);
       a.href = url;
-      a.download = `ATBot_Accuracy_Report_D${checkDay}_${date}.pdf`;
+      a.download = `ATBot_Accuracy_Report_${scope}_D${checkDay}_${date}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -341,7 +340,7 @@ export default function LearnPage() {
     <div style={{ maxWidth: 1100 }}>
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>ATBot Learn</h1>
             <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
@@ -350,7 +349,7 @@ export default function LearnPage() {
           </div>
 
           {/* Controls */}
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", maxWidth: "100%" }}>
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
               {([
                 { d: 1,   label: "BTST",     sub: "D1" },
@@ -372,6 +371,15 @@ export default function LearnPage() {
                 </button>
               ))}
             </div>
+            <select aria-label="Outcome scope" value={scope} onChange={event => setScope(event.target.value as OutcomeScope)} style={{
+              padding: "6px 10px", borderRadius: 8, background: "var(--hover-bg)",
+              border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-primary)", fontSize: 12, outline: "none",
+            }}>
+              <option value="visible">Visible Signals</option>
+              <option value="shadow">Shadow Signals</option>
+              <option value="paper">Paper Positions</option>
+              <option value="all">All Outcomes</option>
+            </select>
             <select value={lookback} onChange={e => setLookback(+e.target.value)} style={{
               padding: "6px 10px", borderRadius: 8, background: "var(--hover-bg)",
               border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-primary)", fontSize: 12, outline: "none",

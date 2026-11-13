@@ -108,23 +108,24 @@ class ATBotReport(FPDF):
         self.cell(w, 5, label.upper(), align="C")
 
 
-async def generate_accuracy_report(days: int = 90, check_day: int = 10) -> str:
+async def generate_accuracy_report(days: int = 90, check_day: int = 10, scope: str = "visible") -> str:
     """
     Generate a PDF accuracy report and save it to the reports/ directory.
-    check_day: 5 or 10 — must match the dashboard filter (default D10)
+    check_day: 1, 2, 5, 10, 50, or 100; scope matches the dashboard filter.
     Returns the absolute path to the saved PDF.
     """
     os.makedirs(REPORTS_DIR, exist_ok=True)
 
     async with AsyncSessionLocal() as db:
         from datetime import timedelta
-        cutoff = datetime.now(IST).replace(tzinfo=None) - timedelta(days=days)
+        cutoff = datetime.utcnow() - timedelta(days=days)
 
         result = await db.execute(
             select(SignalOutcome)
             .where(
                 SignalOutcome.entry_date >= cutoff,
                 SignalOutcome.check_day == check_day,   # match dashboard filter
+                SignalOutcome.scope_filter(scope),
             )
             .order_by(SignalOutcome.entry_date.desc())
         )
@@ -143,13 +144,14 @@ async def generate_accuracy_report(days: int = 90, check_day: int = 10) -> str:
     breakevens   = [r for r in rows    if r.outcome == "BREAKEVEN"]
 
     total_signals  = len(rows)
-    total_resolved = len(decisive)      # matches dashboard "X resolved signals"
+    total_resolved = len(all_resolved)
+    decisive_count = len(decisive)
     # Weighted win rate: WIN=1.0, PARTIAL=0.5, LOSS=0 — identical to dashboard formula
     weighted_wins  = len(wins) + 0.5 * len(partials)
-    win_rate       = round((weighted_wins / total_resolved) * 100, 1) if total_resolved else 0.0
-    avg_pnl        = round(sum(r.pnl_percent or 0 for r in decisive) / total_resolved, 2) if total_resolved else 0.0
-    avg_win_pnl    = round(sum(r.pnl_percent or 0 for r in wins) / len(wins), 2) if wins else 0.0
-    avg_loss_pnl   = round(sum(r.pnl_percent or 0 for r in losses) / len(losses), 2) if losses else 0.0
+    win_rate       = round((weighted_wins / decisive_count) * 100, 1) if decisive_count else 0.0
+    avg_pnl        = round(sum(r.trade_return_percent or 0 for r in decisive) / decisive_count, 2) if decisive_count else 0.0
+    avg_win_pnl    = round(sum(r.trade_return_percent or 0 for r in wins) / len(wins), 2) if wins else 0.0
+    avg_loss_pnl   = round(sum(r.trade_return_percent or 0 for r in losses) / len(losses), 2) if losses else 0.0
 
     # By signal — use decisive outcomes only (matches dashboard)
     by_signal: dict = {}
@@ -162,8 +164,8 @@ async def generate_accuracy_report(days: int = 90, check_day: int = 10) -> str:
             by_signal[sig]["wins"] += 1
         elif r.outcome == "LOSS":
             by_signal[sig]["losses"] += 1
-        if r.pnl_percent is not None:
-            by_signal[sig]["pnl"].append(r.pnl_percent)
+        if r.trade_return_percent is not None:
+            by_signal[sig]["pnl"].append(r.trade_return_percent)
 
     # Top / worst stocks — use decisive outcomes only
     by_stock: dict = {}
@@ -173,8 +175,8 @@ async def generate_accuracy_report(days: int = 90, check_day: int = 10) -> str:
         by_stock[r.symbol]["total"] += 1
         if r.outcome == "WIN":
             by_stock[r.symbol]["wins"] += 1
-        if r.pnl_percent is not None:
-            by_stock[r.symbol]["pnl"].append(r.pnl_percent)
+        if r.trade_return_percent is not None:
+            by_stock[r.symbol]["pnl"].append(r.trade_return_percent)
 
     stock_stats = [
         {
@@ -202,6 +204,7 @@ async def generate_accuracy_report(days: int = 90, check_day: int = 10) -> str:
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(*COLOR_SUBTEXT)
     pdf.cell(0, 6, _safe(f"Performance over last {days} days | Day {check_day} outcomes | {total_signals} signals tracked | {total_resolved} resolved"), ln=True, align="C")
+    pdf.cell(0, 5, f"Scope: {scope}", ln=True, align="C")
     pdf.ln(5)
 
     # ── Section 2: KPI Cards ───────────────────────────────────────────────────
@@ -320,7 +323,7 @@ async def generate_accuracy_report(days: int = 90, check_day: int = 10) -> str:
             pdf.set_fill_color(*bg)
             pdf.set_text_color(*COLOR_TEXT)
             entry_date = r.entry_date.strftime("%d %b") if r.entry_date else "—"
-            pnl_color = COLOR_WIN if (r.pnl_percent or 0) >= 0 else COLOR_LOSS
+            pnl_color = COLOR_WIN if (r.trade_return_percent or 0) >= 0 else COLOR_LOSS
             out_color  = COLOR_WIN if r.outcome == "WIN" else (COLOR_LOSS if r.outcome == "LOSS" else COLOR_HOLD)
 
             pdf.cell(25, 5, entry_date, fill=True, align="C", border=0)
@@ -329,7 +332,7 @@ async def generate_accuracy_report(days: int = 90, check_day: int = 10) -> str:
             pdf.cell(22, 5, f"Rs.{r.entry_price:.0f}" if r.entry_price else "-", fill=True, align="R", border=0)
             pdf.cell(22, 5, f"Rs.{r.price_at_check:.0f}" if r.price_at_check else "-", fill=True, align="R", border=0)
             pdf.set_text_color(*pnl_color)
-            pdf.cell(20, 5, f"{r.pnl_percent:+.1f}%" if r.pnl_percent else "—", fill=True, align="C", border=0)
+            pdf.cell(20, 5, f"{r.trade_return_percent:+.1f}%" if r.trade_return_percent is not None else "0.0%", fill=True, align="C", border=0)
             pdf.set_text_color(*out_color)
             pdf.cell(23, 5, r.outcome or "—", fill=True, align="C", border=0)
             pdf.ln()
@@ -349,7 +352,7 @@ async def generate_accuracy_report(days: int = 90, check_day: int = 10) -> str:
     )
 
     # ── Save ──────────────────────────────────────────────────────────────────
-    fname = f"ATBot_Accuracy_Report_{datetime.now(IST).strftime('%Y%m%d_%H%M')}.pdf"
+    fname = f"ATBot_Accuracy_Report_{scope}_D{check_day}_{datetime.now(IST).strftime('%Y%m%d_%H%M%S_%f')}.pdf"
     fpath = os.path.join(REPORTS_DIR, fname)
     pdf.output(fpath)
     logger.info(f"Report saved: {fpath}")

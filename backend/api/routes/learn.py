@@ -14,8 +14,9 @@ POST /api/learn/trigger-meta → manually trigger meta-learner (dev use)
 import logging
 from datetime import datetime, timedelta
 from collections import defaultdict
+from typing import Literal
 
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -75,23 +76,26 @@ def _directional_accuracy(outcomes: list[dict]) -> float:
 async def get_learn_stats(
     days: int = Query(default=90, ge=7, le=365, description="Look-back window in days"),
     check_day: int = Query(default=10, ge=1, le=100, description="1 (BTST), 2, 5, 10, 50, or 100 day outcomes"),
+    scope: Literal["visible", "shadow", "paper", "all"] = Query(default="visible"),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Returns aggregated win-rate statistics from the signal_outcomes table.
     """
-    since = datetime.now(IST) - timedelta(days=days)
+    since = datetime.utcnow() - timedelta(days=days)
 
     result = await db.execute(
         select(SignalOutcome).where(
             SignalOutcome.entry_date >= since,
             SignalOutcome.check_day == check_day,
+            SignalOutcome.scope_filter(scope),
         ).order_by(SignalOutcome.entry_date.desc())
     )
     rows = result.scalars().all()
 
     if not rows:
         return {
+            "scope": scope,
             "total_signals": 0,
             "total_resolved": 0,
             "total_decisive": 0,
@@ -122,7 +126,7 @@ async def get_learn_stats(
             "fundamental_score": r.fundamental_score,
             "sentiment_score":  r.sentiment_score,
             "entry_date":       r.entry_date,
-            "pnl_percent":      r.pnl_percent or 0.0,
+            "pnl_percent":      r.trade_return_percent or 0.0,
             "outcome":          r.outcome,
             "outcome_detail":   r.outcome_detail,
         }
@@ -217,6 +221,7 @@ async def get_learn_stats(
     weighted_rate  = round((weighted_wins / decisive_count) * 100, 1) if decisive_count else 0.0
 
     return {
+        "scope":              scope,
         "total_signals":       len(all_dicts),
         "total_resolved":      len(resolved),
         "total_decisive":      decisive_count,
@@ -245,6 +250,7 @@ async def get_learn_stats(
 async def get_recent_outcomes(
     limit: int = Query(default=50, ge=5, le=200),
     check_day: int = Query(default=10, ge=1, le=100, description="Filter by check day (1, 2, 5, 10, 50, or 100)"),
+    scope: Literal["visible", "shadow", "paper", "all"] = Query(default="visible"),
     db: AsyncSession = Depends(get_db),
 ):
     """Return the most recent resolved signal outcomes."""
@@ -253,6 +259,7 @@ async def get_recent_outcomes(
         .where(
             SignalOutcome.outcome.in_(["WIN", "PARTIAL", "LOSS", "BREAKEVEN"]),
             SignalOutcome.check_day == check_day,
+            SignalOutcome.scope_filter(scope),
         )
         .order_by(SignalOutcome.entry_date.desc())
         .limit(limit)
@@ -267,7 +274,9 @@ async def get_recent_outcomes(
             "check_day":     r.check_day,
             "entry_price":   r.entry_price,
             "price_at_check": r.price_at_check,
-            "pnl_percent":   r.pnl_percent,
+            "pnl_percent":   r.trade_return_percent,
+            "is_shadow":     bool(r.is_shadow),
+            "is_deployed":   bool(r.is_deployed),
             "outcome":       r.outcome,
             "outcome_detail": r.outcome_detail,
             "composite_score": r.composite_score,
@@ -392,16 +401,19 @@ async def trigger_meta_learner():
 @router.get("/learn/report")
 async def download_accuracy_report(
     days: int = Query(default=90, ge=7, le=365, description="Lookback window in days"),
-    check_day: int = Query(default=10, ge=5, le=10, description="5 or 10 day outcomes — must match dashboard filter"),
+    check_day: int = Query(default=10, ge=1, le=100, description="Outcome horizon: 1, 2, 5, 10, 50, or 100"),
+    scope: Literal["visible", "shadow", "paper", "all"] = Query(default="visible"),
 ):
     """
     Generate and download a PDF accuracy report.
     Shows win rate, signal breakdown, stock performance, and recent trades.
     check_day must match what you're viewing on the Learn page (Day 5 or Day 10).
     """
+    if check_day not in (1, 2, 5, 10, 50, 100):
+        raise HTTPException(status_code=422, detail="Unsupported outcome horizon")
     from backend.engines.report_generator import generate_accuracy_report
     try:
-        fpath = await generate_accuracy_report(days=days, check_day=check_day)
+        fpath = await generate_accuracy_report(days=days, check_day=check_day, scope=scope)
         import os
         fname = os.path.basename(fpath)
         return FileResponse(

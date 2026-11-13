@@ -9,12 +9,30 @@ import requests
 import pandas as pd
 from typing import Optional
 import logging
+from sqlalchemy import select
 
 from backend.config import settings
+from backend.models.schemas import FundamentalData
 
 logger = logging.getLogger(__name__)
 
 FMP_BASE = "https://financialmodelingprep.com/api/v3"
+
+
+async def upsert_fundamentals(db, symbol: str, data: Optional[dict]):
+    if not data:
+        return
+    record = (await db.execute(
+        select(FundamentalData).where(FundamentalData.symbol == symbol)
+    )).scalar_one_or_none()
+    if record is None:
+        record = FundamentalData(symbol=symbol)
+        db.add(record)
+    fields = set(FundamentalData.__table__.columns.keys()) - {"id", "symbol", "updated_at"}
+    for field in fields:
+        value = data.get(field)
+        if value is not None:
+            setattr(record, field, value)
 
 
 # ── yfinance Fundamentals ─────────────────────────────────────────────────

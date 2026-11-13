@@ -9,9 +9,10 @@ v4 (PATCH):
 """
 
 from datetime import datetime
+import json
 from sqlalchemy import (
     Column, Integer, Float, String, Text, Boolean,
-    DateTime, ForeignKey, Index, UniqueConstraint
+    DateTime, ForeignKey, Index, UniqueConstraint, true
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -141,6 +142,38 @@ class AnalysisScore(Base):
     __table_args__ = (
         Index("ix_scores_symbol_ts", "symbol", "timestamp"),
     )
+
+    @classmethod
+    def from_results(cls, symbol: str, analysis: dict, technical: dict):
+        components = analysis.get("components") or {}
+        targets_5d = analysis.get("targets_5d") or analysis.get("targets") or {}
+        targets_10d = analysis.get("targets_10d") or targets_5d
+        return cls(
+            symbol=symbol,
+            technical_score=components.get("technical"),
+            fundamental_score=components.get("fundamental"),
+            sentiment_score=components.get("sentiment"),
+            composite_score=analysis.get("composite_score"),
+            signal=analysis.get("signal"),
+            confidence=analysis.get("confidence"),
+            regime=analysis.get("regime"),
+            current_price=technical.get("close"),
+            target_low_5d=targets_5d.get("conservative"),
+            target_base_5d=targets_5d.get("base"),
+            target_high_5d=targets_5d.get("aggressive"),
+            target_low_10d=targets_10d.get("conservative"),
+            target_base_10d=targets_10d.get("base"),
+            target_high_10d=targets_10d.get("aggressive"),
+            stop_loss=analysis.get("stop_loss"),
+            active_signals=json.dumps(technical.get("signals") or []),
+            dominant_pattern=technical.get("trend"),
+            atr_14=technical.get("atr"),
+            shadow_signal=analysis.get("shadow_signal"),
+            kill_switch_active=1 if analysis.get("kill_switch_active") else 0,
+            trend_score=technical.get("trend_score"),
+            reversion_score=technical.get("reversion_score"),
+            adx=technical.get("adx"),
+        )
 
 
 class PaperPosition(Base):
@@ -354,3 +387,30 @@ class SignalOutcome(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
     __table_args__ = (UniqueConstraint('analysis_score_id', 'check_day', name='uq_outcome_score_day'),)
+
+    @classmethod
+    def scope_filter(cls, scope: str):
+        visible = (cls.is_shadow == 0) | cls.is_shadow.is_(None)
+        if scope == "visible":
+            return visible
+        if scope == "shadow":
+            return cls.is_shadow == 1
+        if scope == "paper":
+            return visible & cls.is_deployed.is_(True)
+        if scope == "all":
+            return true()
+        raise ValueError(f"Unknown outcome scope: {scope}")
+
+    @property
+    def price_return_percent(self):
+        if self.entry_price and self.price_at_check is not None:
+            return (self.price_at_check - self.entry_price) / self.entry_price * 100
+        return None
+
+    @property
+    def trade_return_percent(self):
+        price_return = self.price_return_percent
+        if price_return is None:
+            return self.pnl_percent
+        direction = -1 if (self.signal or "").upper().strip() in ("SELL", "STRONG SELL", "STRONG_SELL") else 1
+        return round(price_return * direction, 2)

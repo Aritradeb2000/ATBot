@@ -22,7 +22,7 @@ from backend.data.market_data import (
 )
 from backend.data.nse_live import get_fii_dii_data, get_market_breadth, get_india_vix
 from backend.data.news_feed import fetch_newsapi_news, fetch_all_rss_feeds, match_articles_to_symbols
-from backend.data.fundamentals import fetch_fundamentals, get_upcoming_earnings
+from backend.data.fundamentals import fetch_fundamentals, get_upcoming_earnings, upsert_fundamentals
 from backend.engines.outcome_tracker import run_outcome_check
 from backend.engines.meta_learner import compute_and_save_adaptive_weights, get_current_adaptive_weights
 from backend.engines.ensemble_scorer import set_adaptive_weights
@@ -138,11 +138,16 @@ async def job_refresh_fundamentals():
     Runs daily at 6 PM IST after market close.
     """
     logger.info("[Scheduler] Refreshing fundamentals...")
+    from backend.models.database import AsyncSessionLocal
+
     count = 0
     for symbol in NIFTY50_SYMBOLS:
         try:
             data = await run_in_threadpool(fetch_fundamentals, symbol)
             if data:
+                async with AsyncSessionLocal() as db:
+                    await upsert_fundamentals(db, symbol, data)
+                    await db.commit()
                 _cache["fundamentals"][symbol] = data
                 count += 1
         except Exception as e:
@@ -404,37 +409,10 @@ async def job_daily_screener():
                     regime=today_regime,   # pre-computed once for the batch
                 )
 
-                targets_5d  = final.get("targets_5d")  or final.get("targets") or {}
-                targets_10d = final.get("targets_10d") or targets_5d
-                record = AnalysisScore(
-                    symbol=symbol,
-                    technical_score=final.get("components", {}).get("technical"),
-                    fundamental_score=final.get("components", {}).get("fundamental"),
-                    sentiment_score=final.get("components", {}).get("sentiment"),
-                    composite_score=final.get("composite_score"),
-                    signal=final.get("signal"),
-                    confidence=final.get("confidence", 0.8),
-                    current_price=tech_result.get("close"),
-                    target_low_5d=targets_5d.get("conservative"),
-                    target_base_5d=targets_5d.get("base"),
-                    target_high_5d=targets_5d.get("aggressive"),
-                    target_low_10d=targets_10d.get("conservative"),
-                    target_base_10d=targets_10d.get("base"),
-                    target_high_10d=targets_10d.get("aggressive"),
-                    stop_loss=final.get("stop_loss"),
-                    active_signals=json.dumps(tech_result.get("signals", [])),
-                    dominant_pattern=tech_result.get("trend"),
-                    atr_14=tech_result.get("atr"),
-                    regime=today_regime,
-                    # v4: shadow signal tracking
-                    shadow_signal=final.get("shadow_signal"),
-                    kill_switch_active=1 if final.get("kill_switch_active") else 0,
-                    trend_score=tech_result.get("trend_score"),
-                    reversion_score=tech_result.get("reversion_score"),
-                    adx=tech_result.get("adx"),
-                )
+                record = AnalysisScore.from_results(symbol, final, tech_result)
                 async with AsyncSessionLocal() as db:
                     db.add(record)
+                    await upsert_fundamentals(db, symbol, fundamentals)
                     await db.commit()
                 saved += 1
             except Exception as e:
@@ -562,30 +540,10 @@ async def job_nightly_precompute(universe_name: str = "nifty200"):
                 regime=today_regime,   # pre-computed once for the batch
             )
 
-            targets = final.get("targets") or {}
-            record = AnalysisScore(
-                symbol=symbol,
-                technical_score=final.get("components", {}).get("technical"),
-                fundamental_score=final.get("components", {}).get("fundamental"),
-                sentiment_score=final.get("components", {}).get("sentiment"),
-                composite_score=final.get("composite_score"),
-                signal=final.get("signal"),
-                confidence=final.get("confidence", 0.8),
-                current_price=tech_result.get("close"),
-                target_low_5d=targets.get("conservative"),
-                target_base_5d=targets.get("base"),
-                target_high_5d=targets.get("aggressive"),
-                target_low_10d=targets.get("conservative"),
-                target_base_10d=targets.get("base"),
-                target_high_10d=targets.get("aggressive"),
-                stop_loss=final.get("stop_loss"),
-                active_signals=json.dumps(tech_result.get("signals", [])),
-                dominant_pattern=tech_result.get("trend"),
-                atr_14=tech_result.get("atr"),
-                regime=today_regime,
-            )
+            record = AnalysisScore.from_results(symbol, final, tech_result)
             async with AsyncSessionLocal() as db:
                 db.add(record)
+                await upsert_fundamentals(db, symbol, fundamentals)
                 await db.commit()
             saved += 1
         except Exception as e:
@@ -778,7 +736,7 @@ def setup_scheduler():
         id="market_data",
         name="Market Data Refresh",
         replace_existing=True,
-        next_run_time=now if is_market_open() else None
+        next_run_time=now
     )
 
     scheduler.add_job(
