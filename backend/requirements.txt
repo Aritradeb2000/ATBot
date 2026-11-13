@@ -41,6 +41,7 @@ pydantic>=2.7.1
 pydantic-settings>=2.3.0
 aiofiles>=23.2.1
 pytz
+fpdf2>=2.7.0
 
 # ── Email Alerts ──────────────────────────────────────────────
 aiosmtplib>=3.0.1

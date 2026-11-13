@@ -208,7 +208,6 @@ def _allocate_capital(
         # Quantity from allocation budget
         qty_from_budget = int(raw_allocation / price)
         qty = min(qty_from_budget, max_qty_by_risk)
-        qty = max(qty, 1)  # at least 1 share
 
         if qty < 1:
             continue

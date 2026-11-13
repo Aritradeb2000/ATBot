@@ -8,9 +8,8 @@ from starlette.concurrency import run_in_threadpool
 from typing import Optional
 import logging
 
-import json
 from backend.data.market_data import fetch_ohlcv
-from backend.data.fundamentals import fetch_fundamentals_yfinance
+from backend.data.fundamentals import fetch_fundamentals_yfinance, upsert_fundamentals
 from backend.data.news_feed import fetch_finnhub_news
 from backend.data.nse_live import get_fii_dii_data
 from backend.data.scheduler import get_cache
@@ -78,36 +77,9 @@ async def get_full_analysis(symbol: str, capital: Optional[float] = None, db: As
 
     # 4. Save to Database
     try:
-        targets    = final_result.get("targets") or {}          # 5d (default)
-        targets_5d = final_result.get("targets_5d") or targets
-        targets_10d= final_result.get("targets_10d") or targets
-        score_record = AnalysisScore(
-            symbol=symbol,
-            technical_score=final_result.get("components", {}).get("technical"),
-            fundamental_score=final_result.get("components", {}).get("fundamental"),
-            sentiment_score=final_result.get("components", {}).get("sentiment"),
-            composite_score=final_result.get("composite_score"),
-            signal=final_result.get("signal"),
-            confidence=final_result.get("confidence", 0.8),
-            current_price=tech_result.get("close"),
-            target_low_5d=targets_5d.get("conservative"),
-            target_base_5d=targets_5d.get("base"),
-            target_high_5d=targets_5d.get("aggressive"),
-            target_low_10d=targets_10d.get("conservative"),
-            target_base_10d=targets_10d.get("base"),
-            target_high_10d=targets_10d.get("aggressive"),
-            stop_loss=final_result.get("stop_loss"),
-            active_signals=json.dumps(tech_result.get("signals", [])),
-            dominant_pattern=tech_result.get("trend"),
-            atr_14=tech_result.get("atr"),
-            # v4: shadow signal tracking
-            shadow_signal=final_result.get("shadow_signal"),
-            kill_switch_active=1 if final_result.get("kill_switch_active") else 0,
-            trend_score=tech_result.get("trend_score"),
-            reversion_score=tech_result.get("reversion_score"),
-            adx=tech_result.get("adx")
-        )
+        score_record = AnalysisScore.from_results(symbol, final_result, tech_result)
         db.add(score_record)
+        await upsert_fundamentals(db, symbol, fundamentals)
         await db.commit()
     except Exception as e:
         await db.rollback()

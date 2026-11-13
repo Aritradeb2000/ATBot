@@ -19,24 +19,147 @@ from starlette.concurrency import run_in_threadpool
 ROOT = Path(__file__).resolve().parent
 
 
-def load_backend_module(name, relative_path, config):
+def load_backend_module(name, relative_path, config, dependencies=None):
     spec = importlib.util.spec_from_file_location(name, ROOT / relative_path)
     if spec is None or spec.loader is None:
         raise ImportError(f"Cannot load {relative_path}")
     module = importlib.util.module_from_spec(spec)
-    original_config = sys.modules.get("backend.config")
-    sys.modules["backend.config"] = config
+    overrides = {"backend.config": config, **(dependencies or {})}
+    original_modules = {key: sys.modules.get(key) for key in overrides}
+    sys.modules.update(overrides)
     try:
         spec.loader.exec_module(module)
     finally:
-        if original_config is None:
-            sys.modules.pop("backend.config", None)
-        else:
-            sys.modules["backend.config"] = original_config
+        for key, original in original_modules.items():
+            if original is None:
+                sys.modules.pop(key, None)
+            else:
+                sys.modules[key] = original
     return module
 
 
+class OptimizerRiskTests(unittest.TestCase):
+    def setUp(self):
+        tree = ast.parse((ROOT / "backend/engines/portfolio_optimizer.py").read_text(encoding="utf-8"))
+        allocate = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_allocate_capital")
+        namespace = {"MIN_ALLOCATION": 5000, "MAX_SL_RISK_PCT": 0.03}
+        exec(compile(ast.Module(body=[allocate], type_ignores=[]), "<optimizer_allocation>", "exec"), namespace)
+        self.allocate = namespace["_allocate_capital"]
+
+    def candidate(self, symbol, price=100000.0, stop=95000.0):
+        return dict(
+            symbol=symbol, company_name=symbol, price=price, stop_loss=stop,
+            target_base=price * 1.1, rr_ratio=2.0, score=90.0,
+            confidence=90.0, signal="BUY", components={}, power_score=1.0,
+        )
+
+    def test_unaffordable_shares_are_skipped(self):
+        candidates = [self.candidate("A.NS"), self.candidate("B.NS")]
+        self.assertEqual(self.allocate(candidates, 50000, 2, {"max_pct_per_stock": 0.25}), [])
+
+    def test_risk_cap_that_allows_zero_shares_is_respected(self):
+        candidates = [self.candidate("A.NS", price=10000, stop=1000)]
+        self.assertEqual(self.allocate(candidates, 50000, 1, {"max_pct_per_stock": 0.25}), [])
+
+    def test_valid_allocations_respect_budget_and_stop_risk(self):
+        candidates = [self.candidate("A.NS", 100, 95), self.candidate("B.NS", 200, 190)]
+        allocations = self.allocate(candidates, 50000, 2, {"max_pct_per_stock": 0.25})
+        self.assertEqual(len(allocations), 2)
+        self.assertLessEqual(sum(row["invested"] for row in allocations), 50000)
+        for row in allocations:
+            self.assertLessEqual(row["invested"], 12500)
+            self.assertLessEqual(row["sl_risk"], 1500)
+
+
+class TrailingStopTests(unittest.TestCase):
+    def setUp(self):
+        tree = ast.parse((ROOT / "backend/engines/outcome_tracker.py").read_text(encoding="utf-8"))
+        evaluate = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_evaluate_trailing_stop")
+        namespace = {}
+        exec(compile(ast.Module(body=[evaluate], type_ignores=[]), "<trailing_stop>", "exec"), namespace)
+        self.evaluate = namespace["_evaluate_trailing_stop"]
+
+    def run_candles(self, candles, is_buy=True):
+        import yfinance as yf
+
+        history = pd.DataFrame(candles, index=pd.date_range("2026-11-12", periods=len(candles), tz="Asia/Kolkata"))
+        with patch.object(yf, "Ticker") as ticker:
+            ticker.return_value.history.return_value = history
+            return self.evaluate(
+                "TEST.NS", date(2026, 11, 11), len(candles), 100,
+                95 if is_buy else 105, 110 if is_buy else 90, is_buy,
+                close_at_horizon=False,
+            )
+
+    def test_long_original_stop_precedes_same_bar_target(self):
+        result = self.run_candles([dict(Open=100, High=112, Low=94, Close=105)])
+        self.assertEqual((result[0], result[4]), ("LOSS", 95))
+
+    def test_short_original_stop_precedes_same_bar_target(self):
+        result = self.run_candles([dict(Open=100, High=106, Low=88, Close=95)], is_buy=False)
+        self.assertEqual((result[0], result[4]), ("LOSS", 105))
+
+    def test_new_breakeven_stop_is_not_applied_retroactively(self):
+        result = self.run_candles([dict(Open=100, High=112, Low=99, Close=108)])
+        self.assertEqual(result[0], "OPEN")
+
+    def test_armed_breakeven_stop_applies_on_following_bar(self):
+        result = self.run_candles([
+            dict(Open=100, High=112, Low=99, Close=108),
+            dict(Open=105, High=106, Low=99, Close=101),
+        ])
+        self.assertEqual((result[0], result[4]), ("BREAKEVEN", 100))
+
+    def test_gap_through_armed_stop_uses_open_price(self):
+        result = self.run_candles([
+            dict(Open=100, High=112, Low=99, Close=108),
+            dict(Open=97, High=99, Low=96, Close=98),
+        ])
+        self.assertEqual((result[0], result[4]), ("LOSS", 97))
+
+    def test_close_fetch_does_not_substitute_a_later_date(self):
+        import logging
+        import yfinance as yf
+        from datetime import timedelta
+
+        tree = ast.parse((ROOT / "backend/engines/outcome_tracker.py").read_text(encoding="utf-8"))
+        fetch = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_fetch_close_price")
+        namespace = {"yf": yf, "timedelta": timedelta, "logger": logging.getLogger("test.price")}
+        exec(compile(ast.Module(body=[fetch], type_ignores=[]), "<fetch_close>", "exec"), namespace)
+        history = pd.DataFrame({"Close": [110]}, index=pd.DatetimeIndex(["2026-11-12"], tz="Asia/Kolkata"))
+        with patch.object(yf, "Ticker") as ticker:
+            ticker.return_value.history.return_value = history
+            self.assertIsNone(namespace["_fetch_close_price"]("TEST.NS", date(2026, 11, 11)))
+            self.assertEqual(namespace["_fetch_close_price"]("TEST.NS", date(2026, 11, 12)), 110)
+
+
 class SchedulerAllocationTests(unittest.TestCase):
+    def test_market_interval_is_not_paused_outside_market_hours(self):
+        import logging
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from apscheduler.triggers.interval import IntervalTrigger
+        from apscheduler.triggers.cron import CronTrigger
+
+        tree = ast.parse((ROOT / "backend/data/scheduler.py").read_text(encoding="utf-8"))
+        setup = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "setup_scheduler")
+        scheduler = AsyncIOScheduler(timezone=pytz.timezone("Asia/Kolkata"))
+        namespace = {
+            "scheduler": scheduler, "datetime": datetime, "IST": pytz.timezone("Asia/Kolkata"),
+            "IntervalTrigger": IntervalTrigger, "CronTrigger": CronTrigger,
+            "is_market_open": lambda: False, "logger": logging.getLogger("test.scheduler"),
+            "settings": SimpleNamespace(market_data_interval_minutes=5, news_refresh_interval_minutes=10,
+                fundamentals_refresh_hour=18, morning_briefing_hour=8, morning_briefing_minute=45),
+        }
+        async def job():
+            pass
+
+        for node in ast.walk(setup):
+            if isinstance(node, ast.Name) and node.id.startswith("job_"):
+                namespace[node.id] = job
+        exec(compile(ast.Module(body=[setup], type_ignores=[]), "<scheduler_setup>", "exec"), namespace)
+        namespace["setup_scheduler"]()
+        self.assertIsNotNone(scheduler.get_job("market_data").next_run_time)
+
     def test_daily_screener_awaits_portfolio_allocation(self):
         tree = ast.parse((ROOT / "backend/data/scheduler.py").read_text(encoding="utf-8"))
         job = next(node for node in tree.body if isinstance(node, ast.AsyncFunctionDef) and node.name == "job_daily_screener")
@@ -110,6 +233,156 @@ class DatabaseIsolationTests(unittest.IsolatedAsyncioTestCase):
         async with self.database.AsyncSessionLocal() as session:
             rows = list((await session.execute(text("SELECT id FROM isolation_probe"))).scalars())
         self.assertEqual(rows, [1])
+
+
+class ScoreMappingTests(unittest.TestCase):
+    def test_all_scan_writers_use_the_canonical_mapping(self):
+        counts = {}
+        for relative_path in ("backend/api/routes/analysis.py", "backend/api/routes/screener.py", "backend/data/scheduler.py"):
+            tree = ast.parse((ROOT / relative_path).read_text(encoding="utf-8"))
+            counts[relative_path] = sum(
+                isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name) and node.func.value.id == "AnalysisScore"
+                and node.func.attr == "from_results" for node in ast.walk(tree)
+            )
+        self.assertEqual(list(counts.values()), [1, 1, 2])
+
+    def test_horizon_targets_regime_and_shadow_fields_are_retained(self):
+        from backend.models.schemas import AnalysisScore
+
+        analysis = dict(
+            targets_5d={"conservative": 110, "base": 120, "aggressive": 130},
+            targets_10d={"conservative": 140, "base": 150, "aggressive": 160},
+            signal="HOLD", shadow_signal="BUY", kill_switch_active=True,
+            regime="SIDEWAYS", confidence=75,
+            components={"technical": 80, "fundamental": 70, "sentiment": 65},
+        )
+        technical = dict(close=100, signals=["Trend"], atr=5, trend_score=80, reversion_score=60, adx=22)
+        record = AnalysisScore.from_results("TEST.NS", analysis, technical)
+        self.assertEqual((record.target_base_5d, record.target_base_10d), (120, 150))
+        self.assertEqual((record.regime, record.shadow_signal, record.kill_switch_active), ("SIDEWAYS", "BUY", 1))
+        self.assertEqual((record.trend_score, record.reversion_score, record.adx), (80, 60, 22))
+
+
+class FundamentalsPersistenceTests(DatabaseIsolationTests):
+    async def test_upsert_saves_sector_and_preserves_known_values(self):
+        from backend.models.schemas import FundamentalData
+
+        config = ModuleType("backend.config")
+        config.settings = SimpleNamespace()
+        fundamentals = load_backend_module("test_fundamentals", "backend/data/fundamentals.py", config)
+        await self.database.init_db()
+        async with self.database.AsyncSessionLocal() as session:
+            await fundamentals.upsert_fundamentals(session, "TEST.NS", {"sector": "Technology", "pe_ratio": 20})
+            await session.commit()
+        async with self.database.AsyncSessionLocal() as session:
+            await fundamentals.upsert_fundamentals(session, "TEST.NS", {"sector": None, "pe_ratio": 22, "unmapped": 1})
+            await session.commit()
+        async with self.database.AsyncSessionLocal() as session:
+            record = (await session.execute(select(FundamentalData))).scalar_one()
+            self.assertEqual(record.sector, "Technology")
+            self.assertEqual(record.pe_ratio, 22)
+
+
+class OutcomeScopeTests(DatabaseIsolationTests):
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        from backend.models.schemas import SignalOutcome
+
+        self.Outcome = SignalOutcome
+        await self.database.init_db()
+        config = ModuleType("backend.config")
+        config.IST = pytz.timezone("Asia/Kolkata")
+        tracker = ModuleType("backend.engines.outcome_tracker")
+        tracker.run_outcome_check = AsyncMock()
+        self.learn = load_backend_module(
+            "test_learn", "backend/api/routes/learn.py", config,
+            {"backend.models.database": self.database, "backend.engines.outcome_tracker": tracker},
+        )
+        async with self.database.AsyncSessionLocal() as session:
+            for symbol, shadow, deployed, signal, price, pnl, outcome in (
+                ("VISIBLE.NS", 0, False, "BUY", 105, 5, "WIN"),
+                ("SHADOW.NS", 1, False, "BUY", 110, 10, "WIN"),
+                ("PAPER.NS", 0, True, "BUY", 95, -5, "LOSS"),
+                ("LEGACY.NS", 0, False, "SELL", 90, -10, "WIN"),
+            ):
+                session.add(SignalOutcome(
+                    symbol=symbol, is_shadow=shadow, is_deployed=deployed, signal=signal,
+                    entry_price=100, price_at_check=price, pnl_percent=pnl, outcome=outcome,
+                    entry_date=datetime.utcnow(), check_day=5,
+                ))
+            await session.commit()
+            legacy = (await session.execute(select(SignalOutcome).where(SignalOutcome.symbol == "LEGACY.NS"))).scalar_one()
+            legacy.is_shadow = None
+            await session.commit()
+
+    async def test_stats_and_recent_rows_use_identical_scopes(self):
+        for scope, expected in (("visible", 3), ("shadow", 1), ("paper", 1), ("all", 4)):
+            with self.subTest(scope=scope):
+                async with self.database.AsyncSessionLocal() as session:
+                    stats = await self.learn.get_learn_stats(days=90, check_day=5, scope=scope, db=session)
+                    recent = await self.learn.get_recent_outcomes(limit=50, check_day=5, scope=scope, db=session)
+                self.assertEqual(stats["total_signals"], expected)
+                self.assertEqual(len(recent), expected)
+                self.assertEqual(stats["scope"], scope)
+                legacy = next((row for row in recent if row["symbol"] == "LEGACY.NS"), None)
+                if legacy:
+                    self.assertEqual(legacy["pnl_percent"], 10)
+
+    async def test_report_uses_same_scope_as_learning_stats(self):
+        config = ModuleType("backend.config")
+        config.IST = pytz.timezone("Asia/Kolkata")
+        report = load_backend_module(
+            "test_report", "backend/engines/report_generator.py", config,
+            {"backend.models.database": self.database},
+        )
+        async with self.database.AsyncSessionLocal() as session:
+            session.add(self.Outcome(
+                symbol="FLAT.NS", signal="BUY", entry_price=100, price_at_check=100,
+                pnl_percent=0, outcome="BREAKEVEN", is_shadow=0,
+                entry_date=datetime.utcnow(), check_day=5,
+            ))
+            await session.commit()
+        captured = []
+        class CapturingReport(report.ATBotReport):
+            def cell(self, *args, **kwargs):
+                captured.append(str(args[2] if len(args) > 2 else kwargs.get("text", "")))
+                return super().cell(*args, **kwargs)
+
+        with TemporaryDirectory() as directory, patch.object(report, "REPORTS_DIR", directory), patch.object(report, "ATBotReport", CapturingReport):
+            for scope in ("visible", "shadow", "paper", "all"):
+                captured.clear()
+                path = await report.generate_accuracy_report(days=90, check_day=5, scope=scope)
+                self.assertTrue(Path(path).is_file())
+                self.assertIn(f"_{scope}_D5_", Path(path).name)
+                self.assertIn(f"Scope: {scope}", captured)
+                expected_count = {"visible": 4, "shadow": 1, "paper": 1, "all": 5}[scope]
+                self.assertTrue(any(f"{expected_count} signals tracked | {expected_count} resolved" in text for text in captured))
+                if scope == "visible":
+                    self.assertIn("+3.33%", captured)
+
+    async def test_report_endpoint_accepts_all_dashboard_horizons(self):
+        import httpx
+        from fastapi import FastAPI
+
+        app = FastAPI()
+        app.include_router(self.learn.router)
+        generator = ModuleType("backend.engines.report_generator")
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "report.pdf"
+            path.write_bytes(b"%PDF-1.4\n")
+            generator.generate_accuracy_report = AsyncMock(return_value=str(path))
+            with patch.dict(sys.modules, {"backend.engines.report_generator": generator}):
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+                    for horizon in (1, 2, 5, 10, 50, 100):
+                        response = await client.get(f"/learn/report?check_day={horizon}&scope=shadow")
+                        self.assertEqual(response.status_code, 200)
+                    response = await client.get("/learn/report?scope=invalid")
+                    self.assertEqual(response.status_code, 422)
+
+    async def test_invalid_scope_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self.Outcome.scope_filter("invalid")
 
 
 class PortfolioPersistenceTests(DatabaseIsolationTests):
@@ -210,6 +483,100 @@ class PortfolioOutcomeTests(PortfolioPersistenceTests):
                 "test_outcome_tracker", "backend/engines/outcome_tracker.py", config
             )
 
+    async def run_at(self, day, price):
+        instant = pytz.timezone("Asia/Kolkata").localize(datetime.combine(day, datetime.min.time()).replace(hour=19))
+        class Clock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return instant.astimezone(tz) if tz else instant.replace(tzinfo=None)
+
+        with patch.object(self.tracker, "datetime", Clock), patch.object(
+            self.tracker, "CHECK_DAYS", [1]
+        ), patch.object(self.tracker, "_refresh_paper_positions", new=AsyncMock()), patch.object(
+            self.tracker, "_fetch_close_price", return_value=price
+        ) as fetch:
+            count = await self.tracker.run_outcome_check()
+            return count, fetch.call_args_list
+
+    async def test_missed_outcome_is_backfilled_at_original_due_date(self):
+        from backend.models.schemas import SignalOutcome
+
+        async with self.database.AsyncSessionLocal() as session:
+            await self.add_score(session, "OLD.NS", timestamp=datetime(2026, 11, 2, 10))
+            await session.commit()
+        count, calls = await self.run_at(date(2026, 11, 6), 105)
+        self.assertEqual(count, 1)
+        self.assertEqual(calls[0].args, ("OLD.NS", date(2026, 11, 3)))
+        async with self.database.AsyncSessionLocal() as session:
+            outcome = (await session.execute(select(SignalOutcome))).scalar_one()
+            self.assertEqual(outcome.pnl_percent, 5)
+
+    async def test_missing_price_is_retried_on_later_day_without_duplicates(self):
+        from backend.models.schemas import SignalOutcome
+
+        async with self.database.AsyncSessionLocal() as session:
+            await self.add_score(session, "RETRY.NS", timestamp=datetime(2026, 11, 2, 10))
+            await session.commit()
+        await self.run_at(date(2026, 11, 3), None)
+        await self.run_at(date(2026, 11, 5), 105)
+        count, calls = await self.run_at(date(2026, 11, 6), 106)
+        self.assertEqual((count, calls), (0, []))
+        async with self.database.AsyncSessionLocal() as session:
+            outcome = (await session.execute(select(SignalOutcome))).scalar_one()
+            self.assertNotEqual(outcome.outcome, "OPEN")
+            self.assertEqual(outcome.price_at_check, 105)
+
+    async def test_pending_older_scan_survives_newer_same_day_hold(self):
+        from backend.models.schemas import SignalOutcome
+
+        async with self.database.AsyncSessionLocal() as session:
+            original = await self.add_score(session, "RETRY.NS", timestamp=datetime(2026, 11, 2, 10))
+            original_id = original.id
+            await session.commit()
+        await self.run_at(date(2026, 11, 3), None)
+        async with self.database.AsyncSessionLocal() as session:
+            await self.add_score(session, "RETRY.NS", signal="HOLD", timestamp=datetime(2026, 11, 2, 11))
+            await session.commit()
+        await self.run_at(date(2026, 11, 5), 105)
+        async with self.database.AsyncSessionLocal() as session:
+            row = (await session.execute(select(SignalOutcome))).scalar_one()
+            self.assertEqual(row.analysis_score_id, original_id)
+            self.assertNotEqual(row.outcome, "OPEN")
+
+    async def test_profitable_sell_has_positive_stored_pnl(self):
+        from backend.models.schemas import SignalOutcome
+
+        async with self.database.AsyncSessionLocal() as session:
+            await self.add_score(session, "SHORT.NS", signal="SELL", stop_loss=105, timestamp=datetime(2026, 11, 2, 10))
+            await session.commit()
+        await self.run_at(date(2026, 11, 4), 90)
+        async with self.database.AsyncSessionLocal() as session:
+            outcome = (await session.execute(select(SignalOutcome))).scalar_one()
+            self.assertEqual((outcome.pnl_amount, outcome.pnl_percent), (10, 10))
+            self.assertEqual(outcome.outcome, "WIN")
+            self.assertEqual(outcome.price_return_percent, -10)
+
+    async def test_legacy_and_new_short_returns_use_prices_consistently(self):
+        from backend.models.schemas import SignalOutcome
+
+        for stored_pnl in (-10, 10):
+            outcome = SignalOutcome(signal="SELL", entry_price=100, price_at_check=90, pnl_percent=stored_pnl)
+            self.assertEqual(outcome.trade_return_percent, 10)
+            self.assertEqual(outcome.price_return_percent, -10)
+
+    async def test_kill_switch_counts_legacy_profitable_shorts_as_wins(self):
+        from backend.models.schemas import SignalOutcome
+
+        async with self.database.AsyncSessionLocal() as session:
+            for index in range(20):
+                session.add(SignalOutcome(
+                    symbol=f"SHORT{index}.NS", signal="SELL", entry_price=100,
+                    price_at_check=90, pnl_percent=-10, outcome="WIN",
+                    regime="SIDEWAYS", is_shadow=0, check_day=5, entry_date=datetime.utcnow(),
+                ))
+            await session.commit()
+        self.assertEqual(await self.tracker.refresh_sideways_win_rate(), (1.0, 20))
+
     async def test_open_position_is_preserved_and_closed_position_releases_capital(self):
         async with self.database.AsyncSessionLocal() as session:
             score = await self.add_score(session, "TEST.NS", timestamp=datetime(2026, 11, 11, 10))
@@ -295,6 +662,7 @@ class EndpointResponsivenessTests(unittest.IsolatedAsyncioTestCase):
             "run_in_threadpool": run_in_threadpool, "get_db": lambda: self.database,
             "fetch_ohlcv": self.blocking_provider,
             "fetch_fundamentals_yfinance": lambda symbol: {},
+            "upsert_fundamentals": AsyncMock(),
             "fetch_finnhub_news": lambda symbol: [],
             "get_cache": lambda: {}, "get_fii_dii_data": lambda: {},
             "analyze_technical": lambda frame: {"close": 101},

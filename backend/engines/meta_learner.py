@@ -268,6 +268,8 @@ async def compute_and_save_adaptive_weights() -> Dict[str, Any]:
                     # BREAKEVEN excluded (|pnl| < 0.5% is noise).
                     SignalOutcome.outcome.in_(["WIN", "LOSS", "PARTIAL"]),
                     SignalOutcome.pnl_percent.isnot(None),
+                    SignalOutcome.entry_price > 0,
+                    SignalOutcome.price_at_check.isnot(None),
                     SignalOutcome.technical_score.isnot(None),
                     SignalOutcome.fundamental_score.isnot(None),
                     SignalOutcome.sentiment_score.isnot(None),
@@ -295,7 +297,7 @@ async def compute_and_save_adaptive_weights() -> Dict[str, Any]:
         "check_day": o.check_day,
         "outcome": o.outcome,
         "signal": o.signal or "HOLD",
-        "pnl_percent": float(o.pnl_percent or 0.0),
+        "pnl_percent": float(o.price_return_percent or 0.0),
         "confidence": (o.confidence or 50.0) / 100.0,
         "regime": (o.regime or "SIDEWAYS").upper(),
         "technical_score": o.technical_score,

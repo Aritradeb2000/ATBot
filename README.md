@@ -47,7 +47,7 @@ The WebSocket sends an initial cache snapshot followed by cache heartbeats every
 | Sentiment | Financial phrase/word lexicons with negation and intensifier handling; no FinBERT/PyTorch runtime |
 | Persistence | Async SQLAlchemy with SQLite/aiosqlite by default |
 | Scheduling | APScheduler with Asia/Kolkata cron jobs |
-| Reports | FPDF API, requiring the additional `fpdf2` package |
+| Reports | FPDF API through the declared `fpdf2` dependency |
 
 Backend dependencies use lower bounds or unpinned versions in [backend/requirements.txt](backend/requirements.txt). Frontend dependencies and scripts are defined in [frontend/package.json](frontend/package.json), with a lockfile for reproducible npm installation.
 
@@ -71,11 +71,7 @@ Copy-Item .env.example .env
 
 Before starting, review the copied configuration. Replace any example credentials with your own, or leave optional provider keys blank. Do not reuse credentials from the template or commit a populated `.env`.
 
-For PDF report generation, also install the dependency currently missing from the requirements list:
-
-```powershell
-.\venv\Scripts\python.exe -m pip install fpdf2
-```
+PDF report support is included through `fpdf2` in the backend requirements.
 
 Start the backend:
 
@@ -144,10 +140,16 @@ PostgreSQL requires a compatible async URL such as `postgresql+asyncpg://...` an
 - **Ensemble:** combines available component scores with BULL/BEAR/SIDEWAYS weights, uses the reversion sub-score in sideways conditions, and calculates ATR-based targets and stops. Confidence is an agreement heuristic on a 0-100 scale, not a calibrated win probability.
 - **Targets:** analysis can return 5-, 10-, 50-, and 100-day projections, plus a textual execution plan and optional visible-BUY sizing when capital is supplied. These are projections, not guaranteed fills or realized reward/risk.
 - **Kill switch:** sideways signals are forced to HOLD when the tracked directional win rate is below 35% with at least 20 eligible trades. Shadow signals can retain the counterfactual setup for evaluation.
-- **Outcomes:** tracked at 1, 2, 5, 10, 50, and 100 weekday horizons. These records feed the learning UI and adaptive-weight calculation; they are not broker trade confirmations.
+- **Outcomes:** tracked at 1, 2, 5, 10, 50, and 100 weekday horizons. Overdue and pending checks are retried using the original due date's close, not the current price. Missing due-date bars remain pending instead of borrowing a later day's price. These records feed the learning UI and adaptive-weight calculation; they are not broker trade confirmations.
 - **Meta-learner:** EWMA and horizon-weighted component-weight adaptation with regime/global fallbacks and holdout checks. The current training cutoff is September 19, 2026; older outcomes are excluded from weight learning. This does not retrain the XGBoost classifier.
 
-Interactive analysis, live screening, optimization, and scheduled scans do not yet share one analysis service. Their supplied market context and persisted fields can differ, so identical symbols need not yield identical results across workflows.
+Interactive analysis, live screening, and scheduled scans share one score-record mapping, retaining separate 5-/10-day targets, regime, shadow signals, and kill-switch metadata. Fundamentals and sectors are persisted alongside scans and during the fundamentals refresh. Their analysis orchestration and supplied market context still differ, so identical symbols need not yield identical results across workflows. Previously saved score snapshots are not automatically regenerated.
+
+### Outcome Statistics Scopes
+
+The Learn page and the statistics, recent-outcomes, and PDF endpoints accept `scope=visible|shadow|paper|all`. The default is `visible`, including older rows with a null shadow flag. `shadow` selects counterfactual signals; `paper` selects visible signals linked to persisted paper allocations; `all` explicitly combines streams. Paper scope shows those signals' horizon returns, not a portfolio equity curve.
+
+Trade P&L is direction-adjusted: a profitable SELL has positive return. Displayed returns are derived from entry/check prices where available, keeping older SELL rows with legacy stored signs consistent. Adaptive learning separately uses raw price movement so bearish predictions are evaluated correctly. New scope/horizon selections are also passed to PDF downloads.
 
 ### Optional XGBoost Filter
 
@@ -166,9 +168,11 @@ The on-demand optimizer and the scheduled paper portfolio are different systems:
 | Optimizer | Scans candidates, filters by risk profile, ranks by score/confidence/reward-risk, and returns a score-weighted allocation proposal. It is not mean-variance optimization and does not create paper positions or broker orders. |
 | Paper portfolio | Runs after the daily scan, uses saved capital (fallback INR 100,000), and persists simulated long positions in `paper_positions`. |
 
+The optimizer skips positions when budget or stop-risk limits allow zero shares; it does not force an unaffordable minimum share.
+
 The paper allocator selects the latest score per symbol, accepts visible BUY/STRONG BUY signals, rejects kill-switch signals and invalid stops, and checks prior allocations/open symbols before creating another entry. Limits are five open positions and two per stored sector; missing sectors share the `Unknown` bucket. Sizing uses regime-adjusted risk and per-position caps, with capital already committed to open positions deducted from the available budget.
 
-Paper positions retain their source score, quantity, sector, entry, stop, target, regime, and eventual exit/P&L across restarts. Outcome checks reconcile open positions, model a breakeven stop after the conservative target, and close on a modeled stop or ten-session horizon when enough bars exist. Intraday event ordering cannot be established from daily candles. `is_deployed` in outcome records means a persisted paper allocation, not real-money execution.
+Paper positions retain their source score, quantity, sector, entry, stop, target, regime, and eventual exit/P&L across restarts. Outcome checks reconcile open positions, model a breakeven stop after the conservative target, and close on a modeled stop or ten-session horizon when enough bars exist. The existing stop is checked before target-triggered adjustments; a newly armed breakeven stop applies from the following candle. Intraday event ordering cannot be established from daily candles. `is_deployed` in outcome records means a persisted paper allocation, not real-money execution.
 
 The textual partial-profit/runner plan returned by analysis is not a fully implemented execution engine. Neither simulated results nor sizing caps guarantee losses under gaps, slippage, fees, or unavailable data. Paper positions currently have no dedicated UI or CRUD API.
 
@@ -214,7 +218,7 @@ Cron jobs use Asia/Kolkata by default. These are the current registrations in [b
 | FII/DII refresh | Daily 18:30 and retry at 20:00; also attempted on startup |
 | Outcomes, adaptive weights, and PDF report | Monday-Friday 18:30 |
 
-Keep the backend running for scheduled work. Catch-up is best-effort, not a durable job queue or complete historical backfill. Completion/progress state is partly in memory, and restarts can repeat work. The market-hours OHLCV job is registered paused when startup occurs outside market hours; the independently registered index refresh still runs. Do not assume that OHLCV job will resume automatically at the next open.
+Keep the backend running for scheduled work. Scan catch-up is best-effort, not a durable job queue or a reconstruction of missed historical analyses. Outcome checks backfill eligible overdue and pending records when their historical price is available. Completion/progress state is partly in memory, and restarts can repeat work. The OHLCV interval remains scheduled outside market hours; its market-hours guard skips work until the market is open.
 
 ## API Reference
 
